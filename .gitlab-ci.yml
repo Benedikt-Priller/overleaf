@@ -27,6 +27,16 @@ variables:
   before_script:
     - echo "Logging into registry $CI_REGISTRY"
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY" || true
+     - |
+       mkdir -p /etc/docker
+       echo '{
+         "registry-mirrors": [
+           "https://mirror.aliyun.com.",
+           "https://docker.mirrors.ustc.edu.cn."
+         ]
+       }' > /etc/docker/daemon.json
+       killall dockerd
+       sleep 2
   after_script:
     - docker logout $CI_REGISTRY || true
 
