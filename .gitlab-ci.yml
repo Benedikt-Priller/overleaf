@@ -95,10 +95,7 @@ build:custom:
         TEMP_DOCKERFILE=$(mktemp)
         cat server-ce/Dockerfile-base > "$TEMP_DOCKERFILE"
         if [ -n "$PACKAGES" ]; then
-          cat >> "$TEMP_DOCKERFILE" << 'EOF'
-
-RUN tlmgr install --repository ${TEXLIVE_MIRROR} \
-EOF
+          printf '\nRUN tlmgr install --repository ${TEXLIVE_MIRROR} \\\n' >> "$TEMP_DOCKERFILE"
           for pkg in $PACKAGES; do
             echo "      $pkg \\" >> "$TEMP_DOCKERFILE"
           done
