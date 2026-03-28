@@ -1,0 +1,197 @@
+# GitLab Runner Configuration Template for Self-Signed Registry
+# Location: /etc/gitlab-runner/config.toml
+# 
+# Usage:
+# 1. Copy this template to /etc/gitlab-runner/config.toml
+# 2. Replace <YOUR_VALUES> with your actual settings
+# 3. Run: sudo gitlab-runner restart
+# 4. Verify: sudo gitlab-runner verify
+
+# Concurrent jobs to run
+concurrent = 4
+
+# Check interval for new jobs
+check_interval = 30
+
+# Session server configuration (optional, for session affinity)
+session_server {
+  listen_address = "127.0.0.1:8093"
+  advertise_address = "runner.example.com:8093"
+  session_timeout = 1800
+}
+
+# Log settings
+log_level = "info"
+log_format = "json"
+
+# Runner 1: Docker Machine Runner (for building across multiple machines)
+[[runners]]
+  name = "docker-docker"
+  url = "https://gitlab.pri-os.de/"
+  id = 1
+  token = "<GITLAB_RUNNER_TOKEN>"
+  token_expiration_interval = 0
+  tls_ca_file = ""
+  tls_cert_file = ""
+  tls_key_file = ""
+  tls_verify = true
+  
+  executor = "docker+machine"
+  
+  environment = [
+    "DOCKER_TLS_VERIFY=0",
+  ]
+  
+  [runners.machine]
+    IdleCount = 1
+    IdleTime = 900
+    OffPeakCount = 0
+    OffPeakIdleTime = 0
+    OffPeakPeriods = ""
+    MaxBuilds = 0
+    MachineDriver = "amazonec2"
+    MachineName = "gitlab-runner-%s"
+    MachineOptions = [
+      "amazonec2-access-key=<AWS_ACCESS_KEY>",
+      "amazonec2-secret-key=<AWS_SECRET_KEY>",
+      "amazonec2-region=us-east-1",
+      "amazonec2-vpc-id=vpc-12345678",
+      "amazonec2-subnet-id=subnet-12345678",
+      "amazonec2-instance-type=t3.large",
+    ]
+  
+  [runners.docker]
+    image = "docker:24.0.0"
+    privileged = true
+    disable_cache = false
+    shm_size = 0
+    # For self-signed certificates, use one of these options:
+    
+    # Option A: Skip TLS verification (dev/test only - less secure)
+    tls_verify = false
+    
+    # Option B: Use CA certificate (recommended for production)
+    # Uncomment and provide path if using valid CA cert
+    # tls_verify = true
+    # ca_file = "/etc/docker/certs.d/registry.gitlab.pri-os.de/ca.crt"
+    
+    # Mount volumes
+    volumes = [
+      "/var/run/docker.sock:/var/run/docker.sock",
+      "/cache",
+      # Optionally mount CA certificate:
+      # "/etc/docker/certs.d/registry.gitlab.pri-os.de/ca.crt:/etc/docker/certs.d/registry.gitlab.pri-os.de/ca.crt:ro",
+    ]
+    
+    # DNS configuration
+    dns = []
+    dns_search = []
+    
+    # Runtime configuration
+    runtime = ""
+    network_mode = "bridge"
+    
+    # Container labels
+    container_labels = {}
+    
+    # Cap add/drop for security
+    cap_add = []
+    cap_drop = []
+    
+    # Device mappings
+    devices = []
+    
+    # Security options
+    security_opt = []
+    
+    # Sysctls for tuning
+    sysctls = {}
+    
+    # Host aliases for network resolution
+    extra_hosts = []
+
+---
+
+# Runner 2: Kubernetes Runner (if using K8s for GitLab Runner)
+[[runners]]
+  name = "kubernetes-runner"
+  url = "https://gitlab.pri-os.de/"
+  id = 2
+  token = "<GITLAB_RUNNER_TOKEN>"
+  executor = "kubernetes"
+  
+  [runners.kubernetes]
+    host = "https://k8s.example.com:6443"
+    cert_file = "/path/to/cert.pem"
+    key_file = "/path/to/key.pem"
+    ca_file = "/path/to/ca.pem"
+    namespace = "gitlab-runner"
+    namespace_overwrite_allowed = "^.*$"
+    
+    # Image to use for build pod
+    image = "docker:24.0.0"
+    privileged = true
+    
+    # Service account
+    service_account = "gitlab-runner"
+    
+    # DNS configuration
+    dns_policy = "cluster-first"
+    
+    # Security context
+    [runners.kubernetes.runner_pod_annotations]
+      "annotation-key" = "annotation-value"
+    
+    # Resource limits
+    [runners.kubernetes.cpu_limit]
+      memory = "2Gi"
+      cpu = "2"
+    
+    [runners.kubernetes.cpu_request]
+      memory = "512Mi"
+      cpu = "500m"
+
+---
+
+# Runner 3: Shell Runner (for quick testing on runner host)
+[[runners]]
+  name = "shell-runner"
+  url = "https://gitlab.pri-os.de/"
+  id = 3
+  token = "<GITLAB_RUNNER_TOKEN>"
+  executor = "shell"
+  shell = "bash"
+
+---
+
+# ============================================================================
+# CERTIFICATE SETUP INSTRUCTIONS
+# ============================================================================
+#
+# If using Option B (tls_verify = true with CA certificate):
+#
+# 1. Extract CA certificate from your GitLab instance:
+#    ```bash
+#    openssl s_client -showcerts -connect registry.gitlab.pri-os.de:443 < /dev/null | \
+#      openssl x509 -outform PEM > /tmp/gitlab-ca.crt
+#    ```
+#
+# 2. Place certificate in Docker certs directory:
+#    ```bash
+#    sudo mkdir -p /etc/docker/certs.d/registry.gitlab.pri-os.de
+#    sudo cp /tmp/gitlab-ca.crt /etc/docker/certs.d/registry.gitlab.pri-os.de/ca.crt
+#    sudo chown root:root /etc/docker/certs.d/registry.gitlab.pri-os.de/ca.crt
+#    sudo chmod 644 /etc/docker/certs.d/registry.gitlab.pri-os.de/ca.crt
+#    ```
+#
+# 3. Test certificate is installed:
+#    ```bash
+#    docker run --rm alpine curl -v https://registry.gitlab.pri-os.de/v2/
+#    ```
+#
+# 4. Restart GitLab Runner:
+#    ```bash
+#    sudo gitlab-runner restart
+#    ```
+#
+# ============================================================================

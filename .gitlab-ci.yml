@@ -9,7 +9,9 @@ stages:
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: "/certs"
-  DOCKER_TLS_VERIFY: 1
+  # For private registries with self-signed certs, set DOCKER_TLS_VERIFY=0
+  # Or mount CA certificate at /etc/docker/certs.d/<registry>/ca.crt
+  DOCKER_TLS_VERIFY: 0  # Set to 1 if using valid certificates
   DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
   # Change these to your registry and namespace
   REGISTRY: "$CI_REGISTRY"
@@ -23,9 +25,10 @@ variables:
   services:
     - docker:24.0.0-dind
   before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - echo "Logging into registry $CI_REGISTRY"
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY" || true
   after_script:
-    - docker logout $CI_REGISTRY
+    - docker logout $CI_REGISTRY || true
 
 # Build base image with standard packages
 build:base:
@@ -86,12 +89,9 @@ build:custom:
   script:
     - echo "Building image with custom packages..."
     - |
-      # If .custom-packages file exists, build with those packages
       if [ -f ".custom-packages" ]; then
         PACKAGES=$(grep -v '^\s*#' .custom-packages | grep -v '^\s*$' | tr '\n' ' ')
         echo "Custom packages: $PACKAGES"
-        
-        # Build base with custom packages
         TEMP_DOCKERFILE=$(mktemp)
         cat server-ce/Dockerfile-base > "$TEMP_DOCKERFILE"
         if [ -n "$PACKAGES" ]; then
@@ -101,26 +101,22 @@ build:custom:
           done
           sed -i '$ s/ \\$//' "$TEMP_DOCKERFILE"
         fi
-        
         docker build \
           -f "$TEMP_DOCKERFILE" \
           --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet \
           -t "$IMAGE_BASE:custom-$CI_COMMIT_SHA" \
           -t "$IMAGE_BASE:custom-latest" \
           .
-        
         docker build \
           -f server-ce/Dockerfile \
           --build-arg OVERLEAF_BASE_TAG="$IMAGE_BASE:custom-$CI_COMMIT_SHA" \
           -t "$IMAGE_FINAL:custom-$CI_COMMIT_SHA" \
           -t "$IMAGE_FINAL:custom-latest" \
           .
-        
         docker push "$IMAGE_BASE:custom-$CI_COMMIT_SHA"
         docker push "$IMAGE_BASE:custom-latest"
         docker push "$IMAGE_FINAL:custom-$CI_COMMIT_SHA"
         docker push "$IMAGE_FINAL:custom-latest"
-        
         rm "$TEMP_DOCKERFILE"
       fi
   only:
@@ -138,27 +134,17 @@ publish:helm:
     - echo "Packaging Helm chart..."
     - |
       cd helm/overleaf
-      
-      # Update chart version to match CI commit
       sed -i "s/version: .*/version: 0.1.0-$CI_COMMIT_SHORT_SHA/" Chart.yaml
       sed -i "s/appVersion: .*/appVersion: $CI_COMMIT_SHORT_SHA/" Chart.yaml
-      
-      # Update image tags in values
       sed -i "s|registry:.*|$REGISTRY|" values.yaml
       sed -i "s|repository:.*|$IMAGE_PATH/sharelatex|" values.yaml
       sed -i "s|tag:.*|$CI_COMMIT_SHORT_SHA|" values.yaml
-      
-      # Package chart
       helm package . --destination ../../
-      
       cd /builds/$CI_PROJECT_PATH
-    
     - echo "Publishing to Package Registry..."
     - |
       CHART_FILE=$(ls overleaf-0.1.0-*.tgz)
-      
-      # Login to GitLab Package Registry
-      curl -u gitlab-ci-token:$CI_JOB_TOKEN \
+      curl -u gitlab-ci-token:"$CI_JOB_TOKEN" \
         -F chart=@"$CHART_FILE" \
         "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/helm/api/stable/charts"
   dependencies: []
@@ -177,38 +163,25 @@ test:compile:
     - |
       mkdir -p /tmp/test-compile
       cd /tmp/test-compile
-      
-      # Create a test document that uses a package requiring auto-install
       cat > test.tex << 'EOF'
       \documentclass{article}
       \usepackage{glossaries}
       \usepackage{minted}
       \usepackage{tikz}
-      
       \title{AutoInstall Test}
       \author{GitLab CI}
-      
       \begin{document}
       \maketitle
-      
       \section{Introduction}
       Testing automatic package installation.
-      
-      % Glossary entry
-      \gls{latex}
-      
       \end{document}
       EOF
-      
-      # Run compilation
       latexmk -pdf -interaction=nonstopmode test.tex || true
-      
-      # Check if PDF was created
       if [ -f test.pdf ]; then
-        echo "✓ Compilation successful!"
+        echo "Compilation successful!"
         ls -lh test.pdf
       else
-        echo "✗ Compilation failed"
+        echo "Compilation failed"
         exit 1
       fi
   artifacts:
