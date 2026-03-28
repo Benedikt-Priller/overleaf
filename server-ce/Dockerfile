@@ -86,6 +86,14 @@ RUN chmod +x /overleaf/bin/force-history-resyncs
 # -----------------------
 COPY server-ce/config/latexmkrc /usr/local/share/latexmk/LatexMk
 
+# Copy LaTeX auto-installation wrapper scripts
+# -----------------------
+COPY server-ce/bin/pdflatex-autoinst /usr/local/bin/pdflatex-autoinst
+COPY server-ce/bin/latex-autoinst /usr/local/bin/latex-autoinst
+COPY server-ce/bin/xelatex-autoinst /usr/local/bin/xelatex-autoinst
+COPY server-ce/bin/lualatex-autoinst /usr/local/bin/lualatex-autoinst
+RUN chmod +x /usr/local/bin/*-autoinst
+
 # File that controls open|closed status of the site
 # -------------------------------------------------
 ENV SITE_MAINTENANCE_FILE="/etc/overleaf/site_status"

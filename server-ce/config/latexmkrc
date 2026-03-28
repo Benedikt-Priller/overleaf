@@ -1,3 +1,13 @@
 # equivalent to -gt option. Used to prevent latexmk from skipping recompilation
 # of output.log and output.pdf
 $go_mode = 3;
+
+# Enable automatic package installation via wrapper scripts
+# The pdflatex, xelatex, lualatex, and latex commands are wrapped to automatically
+# install missing packages when they are detected during compilation
+
+# Use wrapper scripts that handle package auto-installation
+$pdflatex = 'pdflatex-autoinst %O %S';
+$latex = 'latex-autoinst %O %S';
+$xelatex = 'xelatex-autoinst %O %S';
+$lualatex = 'lualatex-autoinst %O %S';

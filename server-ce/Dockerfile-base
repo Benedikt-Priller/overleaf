@@ -79,6 +79,91 @@ RUN mkdir /install-tl-unx \
 &&  tlmgr path add \
 &&  rm -rf /install-tl-unx
 
+# Install commonly-used LaTeX packages to reduce compilation time
+# This provides a good baseline for most academic and technical documents
+# Users can still install additional packages via the auto-install mechanism
+# -----------------------------------------------------------------
+RUN tlmgr install --repository ${TEXLIVE_MIRROR} \
+      amsfonts \
+      amsmath \
+      amssymb \
+      babel \
+      babelbib \
+      beamer \
+      bidi \
+      bookmark \
+      booktabs \
+      breakurl \
+      caption \
+      cite \
+      color \
+      colortbl \
+      csquotes \
+      enumitem \
+      eso-pic \
+      etoc \
+      fancyhdr \
+      fancyvrb \
+      fontspec \
+      float \
+      fontawesome5 \
+      geometry \
+      glossaries \
+      graphicx \
+      grffile \
+      graphics \
+      hyperref \
+      iftex \
+      inputenc \
+      kantlipsum \
+      lastpage \
+      listings \
+      lmodern \
+      logreq \
+      makechap \
+      makeindex \
+      marginnote \
+      marvosym \
+      mathtools \
+      microtype \
+      minted \
+      natbib \
+      notoccite \
+      palatino \
+      paralist \
+      parskip \
+      pdfpages \
+      pgf \
+      polyglossia \
+      preview \
+      ragged2e \
+      soul \
+      splitindex \
+      subfig \
+      table \
+      template \
+      texshade \
+      tgbonum \
+      tgcadm \
+      tgcursor \
+      tgheros \
+      tgpagella \
+      tikz \
+      tikzmark \
+      titlesec \
+      tocloft \
+      todonotes \
+      unicode-math \
+      units \
+      url \
+      utopia \
+      varwidth \
+      verbatim \
+      wasysym \
+      wrapfig \
+      xcolor \
+      xkeyval
+
 
 # Set up overleaf user and home directory
 # -----------------------------------------

@@ -1,0 +1,89 @@
+#!/bin/bash
+# Wrapper script for xelatex command with automatic package installation
+# This script runs xelatex and automatically installs missing packages
+
+set -e
+
+TEXLIVE_MIRROR="${TEXLIVE_MIRROR:-https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet}"
+MAX_ATTEMPTS=3
+ATTEMPT=0
+INSTALLED_PACKAGES=()
+
+# Extract package name from LaTeX error message
+extract_package() {
+    local line="$1"
+    
+    # Pattern 1: File `package.sty' not found
+    if [[ $line =~ File\ \`([^\']+)\.sty\'\ not\ found ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    # Pattern 2: File `package.cls' not found  
+    if [[ $line =~ File\ \`([^\']+)\.cls\'\ not\ found ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    # Pattern 3: I can't find file `package'
+    if [[ $line =~ I\ can\'t\ find\ file\ \`([^\']+)\' ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    
+    return 1
+}
+
+# Try installing a package
+try_install_package() {
+    local package="$1"
+    
+    # Avoid reinstalling the same package
+    if [[ " ${INSTALLED_PACKAGES[@]} " =~ " ${package} " ]]; then
+        return 1
+    fi
+    
+    echo "===== AutoInstall: Installing package '$package' =====" >&2
+    
+    if tlmgr install --repository "$TEXLIVE_MIRROR" "$package" 2>&1; then
+        INSTALLED_PACKAGES+=("$package")
+        return 0
+    else
+        echo "===== AutoInstall: Failed to install package '$package' =====" >&2
+        return 1
+    fi
+}
+
+# Main compilation loop with auto-install
+while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+    ATTEMPT=$((ATTEMPT + 1))
+    
+    # Run the actual xelatex command
+    if /usr/bin/xelatex "$@" 2>&1 | tee /tmp/xelatex_output.txt; then
+        # Success
+        exit 0
+    else
+        EXIT_CODE=$?
+        
+        # Check if there's a missing package error in the output
+        PACKAGE_FOUND=0
+        while IFS= read -r line; do
+            if PACKAGE=$(extract_package "$line"); then
+                if try_install_package "$PACKAGE"; then
+                    PACKAGE_FOUND=1
+                    break
+                fi
+            fi
+        done < /tmp/xelatex_output.txt
+        
+        # If we found and installed a package, retry
+        if [ $PACKAGE_FOUND -eq 1 ]; then
+            echo "===== AutoInstall: Retrying xelatex after package installation =====" >&2
+            continue
+        fi
+        
+        # If no package found or installation failed, exit with original error
+        exit $EXIT_CODE
+    fi
+done
+
+echo "===== AutoInstall: Max attempts ($MAX_ATTEMPTS) reached =====" >&2
+exit 1
