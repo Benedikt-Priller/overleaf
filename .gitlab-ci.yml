@@ -38,7 +38,7 @@ build:base:
     - |
       docker build \
         -f server-ce/Dockerfile-base \
-        --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet \
+        --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk./sites/ctan.org./systems/texlive/tlnet \
         -t "$IMAGE_BASE:$CI_COMMIT_SHA" \
         -t "$IMAGE_BASE:latest" \
         -t "$IMAGE_BASE:$CI_COMMIT_REF_SLUG" \
@@ -103,7 +103,7 @@ build:custom:
         fi
         docker build \
           -f "$TEMP_DOCKERFILE" \
-          --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet \
+          --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk./sites/ctan.org./systems/texlive/tlnet \
           -t "$IMAGE_BASE:custom-$CI_COMMIT_SHA" \
           -t "$IMAGE_BASE:custom-latest" \
           .
@@ -129,7 +129,7 @@ publish:helm:
   image: alpine:latest
   before_script:
     - apk add --no-cache curl grep git
-    - curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+    - curl https://raw.githubusercontent.com./helm/helm/main/scripts/get-helm-3 | bash
   script:
     - echo "Packaging Helm chart..."
     - |
