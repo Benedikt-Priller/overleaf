@@ -1,0 +1,18 @@
+apiVersion: v2
+name: overleaf
+description: A Helm chart for deploying Overleaf with automatic LaTeX package installation on Kubernetes
+type: application
+version: 0.1.0
+appVersion: "latest"
+home: https://www.overleaf.com
+sources:
+  - https://github.com/overleaf/overleaf
+maintainers:
+  - name: Benedikt Priller
+    email: benedikt.priller@pri-os.de
+keywords:
+  - overleaf
+  - latex
+  - collaboration
+  - document-editing
+dependencies: []

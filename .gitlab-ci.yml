@@ -1,0 +1,235 @@
+# GitLab CI/CD Pipeline for Overleaf with Auto-Installing LaTeX
+# This pipeline builds Docker images and publishes a Helm chart to GitLab Package Registry
+
+stages:
+  - build
+  - publish
+  - helm
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_TLS_VERIFY: 1
+  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  # Change these to your registry and namespace
+  REGISTRY: "$CI_REGISTRY"
+  IMAGE_PATH: "$CI_REGISTRY_IMAGE"
+  IMAGE_BASE: "$CI_REGISTRY_IMAGE/sharelatex-base"
+  IMAGE_FINAL: "$CI_REGISTRY_IMAGE/sharelatex"
+
+.docker_build_template: &docker_build
+  stage: build
+  image: docker:24.0.0
+  services:
+    - docker:24.0.0-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  after_script:
+    - docker logout $CI_REGISTRY
+
+# Build base image with standard packages
+build:base:
+  <<: *docker_build
+  script:
+    - echo "Building base Docker image..."
+    - |
+      docker build \
+        -f server-ce/Dockerfile-base \
+        --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet \
+        -t "$IMAGE_BASE:$CI_COMMIT_SHA" \
+        -t "$IMAGE_BASE:latest" \
+        -t "$IMAGE_BASE:$CI_COMMIT_REF_SLUG" \
+        .
+    - docker push "$IMAGE_BASE:$CI_COMMIT_SHA"
+    - docker push "$IMAGE_BASE:latest"
+    - docker push "$IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+  only:
+    changes:
+      - "server-ce/Dockerfile-base"
+      - "server-ce/config/latexmkrc"
+      - "server-ce/bin/*-autoinst"
+      - ".gitlab-ci.yml"
+  artifacts:
+    reports:
+      dotenv: build.env
+  after_script:
+    - echo "BASE_IMAGE_TAG=$CI_COMMIT_SHA" >> build.env
+    - docker logout $CI_REGISTRY
+
+# Build final image with all services
+build:final:
+  <<: *docker_build
+  needs:
+    - build:base
+  script:
+    - echo "Building final Docker image..."
+    - |
+      docker build \
+        -f server-ce/Dockerfile \
+        --build-arg OVERLEAF_BASE_TAG="$IMAGE_BASE:$CI_COMMIT_SHA" \
+        -t "$IMAGE_FINAL:$CI_COMMIT_SHA" \
+        -t "$IMAGE_FINAL:latest" \
+        -t "$IMAGE_FINAL:$CI_COMMIT_REF_SLUG" \
+        .
+    - docker push "$IMAGE_FINAL:$CI_COMMIT_SHA"
+    - docker push "$IMAGE_FINAL:latest"
+    - docker push "$IMAGE_FINAL:$CI_COMMIT_REF_SLUG"
+  only:
+    - branches
+    - tags
+
+# Build with custom packages (optional, triggered by custom-packages changes)
+build:custom:
+  <<: *docker_build
+  needs:
+    - build:base
+  script:
+    - echo "Building image with custom packages..."
+    - |
+      # If .custom-packages file exists, build with those packages
+      if [ -f ".custom-packages" ]; then
+        PACKAGES=$(grep -v '^\s*#' .custom-packages | grep -v '^\s*$' | tr '\n' ' ')
+        echo "Custom packages: $PACKAGES"
+        
+        # Build base with custom packages
+        TEMP_DOCKERFILE=$(mktemp)
+        cat server-ce/Dockerfile-base > "$TEMP_DOCKERFILE"
+        if [ -n "$PACKAGES" ]; then
+          cat >> "$TEMP_DOCKERFILE" << 'EOF'
+
+RUN tlmgr install --repository ${TEXLIVE_MIRROR} \
+EOF
+          for pkg in $PACKAGES; do
+            echo "      $pkg \\" >> "$TEMP_DOCKERFILE"
+          done
+          sed -i '$ s/ \\$//' "$TEMP_DOCKERFILE"
+        fi
+        
+        docker build \
+          -f "$TEMP_DOCKERFILE" \
+          --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet \
+          -t "$IMAGE_BASE:custom-$CI_COMMIT_SHA" \
+          -t "$IMAGE_BASE:custom-latest" \
+          .
+        
+        docker build \
+          -f server-ce/Dockerfile \
+          --build-arg OVERLEAF_BASE_TAG="$IMAGE_BASE:custom-$CI_COMMIT_SHA" \
+          -t "$IMAGE_FINAL:custom-$CI_COMMIT_SHA" \
+          -t "$IMAGE_FINAL:custom-latest" \
+          .
+        
+        docker push "$IMAGE_BASE:custom-$CI_COMMIT_SHA"
+        docker push "$IMAGE_BASE:custom-latest"
+        docker push "$IMAGE_FINAL:custom-$CI_COMMIT_SHA"
+        docker push "$IMAGE_FINAL:custom-latest"
+        
+        rm "$TEMP_DOCKERFILE"
+      fi
+  only:
+    changes:
+      - ".custom-packages"
+
+# Publish Helm chart to GitLab Package Registry
+publish:helm:
+  stage: publish
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl grep git
+    - curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  script:
+    - echo "Packaging Helm chart..."
+    - |
+      cd helm/overleaf
+      
+      # Update chart version to match CI commit
+      sed -i "s/version: .*/version: 0.1.0-$CI_COMMIT_SHORT_SHA/" Chart.yaml
+      sed -i "s/appVersion: .*/appVersion: $CI_COMMIT_SHORT_SHA/" Chart.yaml
+      
+      # Update image tags in values
+      sed -i "s|registry:.*|$REGISTRY|" values.yaml
+      sed -i "s|repository:.*|$IMAGE_PATH/sharelatex|" values.yaml
+      sed -i "s|tag:.*|$CI_COMMIT_SHORT_SHA|" values.yaml
+      
+      # Package chart
+      helm package . --destination ../../
+      
+      cd /builds/$CI_PROJECT_PATH
+    
+    - echo "Publishing to Package Registry..."
+    - |
+      CHART_FILE=$(ls overleaf-0.1.0-*.tgz)
+      
+      # Login to GitLab Package Registry
+      curl -u gitlab-ci-token:$CI_JOB_TOKEN \
+        -F chart=@"$CHART_FILE" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/helm/api/stable/charts"
+  dependencies: []
+  only:
+    - tags
+    - main
+
+# Performance test - compile a test document
+test:compile:
+  stage: build
+  image: "$IMAGE_FINAL:$CI_COMMIT_SHA"
+  needs:
+    - build:final
+  script:
+    - echo "Testing LaTeX compilation with auto-install..."
+    - |
+      mkdir -p /tmp/test-compile
+      cd /tmp/test-compile
+      
+      # Create a test document that uses a package requiring auto-install
+      cat > test.tex << 'EOF'
+      \documentclass{article}
+      \usepackage{glossaries}
+      \usepackage{minted}
+      \usepackage{tikz}
+      
+      \title{AutoInstall Test}
+      \author{GitLab CI}
+      
+      \begin{document}
+      \maketitle
+      
+      \section{Introduction}
+      Testing automatic package installation.
+      
+      % Glossary entry
+      \gls{latex}
+      
+      \end{document}
+      EOF
+      
+      # Run compilation
+      latexmk -pdf -interaction=nonstopmode test.tex || true
+      
+      # Check if PDF was created
+      if [ -f test.pdf ]; then
+        echo "✓ Compilation successful!"
+        ls -lh test.pdf
+      else
+        echo "✗ Compilation failed"
+        exit 1
+      fi
+  artifacts:
+    paths:
+      - /tmp/test-compile/test.pdf
+    expire_in: 1 week
+  only:
+    - merge_requests
+    - main
+
+# SAST Security scanning
+security:container-scan:
+  stage: publish
+  image: trivy:latest
+  script:
+    - trivy image --severity HIGH,CRITICAL "$IMAGE_FINAL:$CI_COMMIT_SHA"
+  allow_failure: true
+  only:
+    - merge_requests
+    - main
+    - tags

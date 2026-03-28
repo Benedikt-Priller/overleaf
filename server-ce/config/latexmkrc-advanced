@@ -1,0 +1,162 @@
+# Advanced Latexmkrc Configuration for Overleaf with Auto-Installation
+# =====================================================================
+# This is an OPTIONAL advanced configuration that users can implement
+# by adding it to their project root as .latexmkrc or latexmkrc
+
+# NOTE: Project-level .latexmkrc files override the system-level configuration
+# Place this file in your Overleaf project root to use custom settings
+
+# Equivalent to -gt option. Used to prevent latexmk from skipping recompilation
+# of output.log and output.pdf
+$go_mode = 3;
+
+# ====================
+# Auto-Installation Configuration
+# ====================
+
+# Use wrapper scripts that handle automatic package installation
+$pdflatex = 'pdflatex-autoinst %O %S';
+$latex = 'latex-autoinst %O %S';
+$xelatex = 'xelatex-autoinst %O %S';
+$lualatex = 'lualatex-autoinst %O %S';
+
+# ====================
+# Performance Tuning
+# ====================
+
+# Maximum number of times latexmk will run a rule
+$max_repeat = 5;
+
+# Show verbose output (uncomment if you want to see all latexmk actions)
+# $verbose = 1;
+
+# ====================
+# Bibtex / Bibliography
+# ====================
+
+# Use bibtex or biber (modern biblatex backend)
+# Uncomment the one you use:
+$bibtex = 'bibtex %O %B';
+# $bibtex = 'biber %O %B';
+
+# ====================
+# Bibliography Indices
+# ====================
+
+# Use makeindex for glossaries and indices
+$makeindex = 'makeindex %O -o %D %S';
+
+# For glossary entries (requires glossaries package)
+# Usually handled automatically, but you can customize:
+# push @generated_exts, 'glo', 'gls';
+
+# ====================
+# Output Handling
+# ====================
+
+# Don't cleanup intermediate files (comment out if you want auto-cleanup)
+# $clean_ext = "dvi ps eps";
+
+# Specify which files to remove on clean
+$clean_full_ext = "aux bbl blg brf glo gls glg idx ilg ind ist log out toc xdv";
+
+# ====================
+# Compilation Behavior
+# ====================
+
+# Ensure PDF mode (not DVI)
+$pdf_mode = 1;
+
+# Alternative: Use DVI mode (0), PS mode (2), or PDF via PS mode (3)
+# $pdf_mode = 2;
+
+# ====================
+# Error Handling
+# ====================
+
+# Show warnings (default: show all warnings)
+$show_warn = 1;
+
+# Continue on first error (set to 1 for batch mode compilation)
+# $interaction = 5;  # nonstopmode
+
+# ====================
+# Preview Configuration
+# ====================
+
+# Uncomment to enable automatic PDF preview after successful compilation
+# Note: This may not work in Overleaf, but works in local installations
+# $pdf_previewer = 'evince %O %S &';
+# $dvi_previewer = 'evince %O %S &';
+
+# ====================
+# Advanced: Custom Rules
+# ====================
+
+# Example: Always run makeindex for glossaries
+# add_cus_dep('glo', 'gls', 0, 'makeglos');
+# sub makeglos {
+#   system("makeindex -s $$Psource.ist -t $$Ptarget.glg -o $$Ptarget $$Psource");
+# }
+
+# Example: Support for Asymptote (advanced graphics)
+# add_cus_dep('asy', '1', 0, 'asy2tex');
+# sub asy2tex {
+#   system("asy $$Psource");
+# }
+
+# Example: Support for GraphViz (graph visualization)
+# add_cus_dep('gv', 'png', 0, 'gv2png');
+# sub gv2png {
+#   system("dot -Tpng $$Psource -o $$Ptarget");
+# }
+
+# ====================
+# Parallel Compilation
+# ====================
+
+# Number of parallel jobs for latexmk (requires -j flag or here)
+# Also requires pdflatex to be run with multiple -src-specials
+# This can speed up large documents
+# $jobs = 4;
+
+# ====================
+# Environment Variables
+# ====================
+
+# Ensure certain environment variables are passed through
+# This is useful for package-specific configurations
+# $ENV{'LUA_PATH'} = '/path/to/lua/modules' if defined $ENV{'LUA_PATH'};
+
+# ====================
+# Troubleshooting Tips
+# ====================
+
+# 1. To see what latexmk is doing, run with -verbose
+# 2. To force full rebuild, use latexmk -C (clean all) before compiling
+# 3. To see all rules being applied, use -version
+# 4. Check latexmk manual for more options: man latexmk
+
+# Examples of common issues and fixes:
+# 
+# Issue: Bibliography not updating
+# Fix: Add these lines above:
+# $bibtex = 'bibtex %O %B';
+# add_cus_dep('aux', 'bbl', 0, 'my_bibtex');
+#
+# Issue: Glossaries not generated
+# Fix: Ensure glossaries package is installed and use:
+# push @generated_exts, 'glo', 'gls';
+#
+# Issue: Compilation hangs
+# Fix: Increase max_repeat or check for infinite loops in your LaTeX
+
+# ====================
+# Notes for Overleaf Users
+# ====================
+
+# 1. This file will be used if placed in your project root
+# 2. It's recommended to use the minimal configuration needed
+# 3. The auto-installation wrapper scripts are always active
+# 4. Large documents benefit from the $go_mode = 3 setting
+# 5. For very large projects, consider breaking into smaller files with \input
