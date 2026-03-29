@@ -33,10 +33,13 @@ variables:
     - echo "Logging into registry $CI_REGISTRY"
     - |
       if ! echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"; then
-        echo "HTTPS registry login failed, retrying with explicit HTTP for insecure registry"
+        echo "HTTPS registry login failed, writing auth config for insecure registry flow"
         REGISTRY_NO_SCHEME="${CI_REGISTRY#https://}"
         REGISTRY_NO_SCHEME="${REGISTRY_NO_SCHEME#http://}"
-        echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "http://${REGISTRY_NO_SCHEME}"
+        mkdir -p "$HOME/.docker"
+        AUTH_B64="$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')"
+        printf '{"auths":{"%s":{"auth":"%s"}}}\n' "$REGISTRY_NO_SCHEME" "$AUTH_B64" > "$HOME/.docker/config.json"
+        echo "Docker auth config created for ${REGISTRY_NO_SCHEME}"
       fi
   after_script:
     - docker logout $CI_REGISTRY || true
