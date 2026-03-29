@@ -2,7 +2,8 @@
 # Overleaf Base Image (sharelatex/sharelatex-base)
 # --------------------------------------------------
 
-FROM phusion/baseimage:noble-1.0.2
+ARG BASE_IMAGE=phusion/baseimage:noble-1.0.2
+FROM ${BASE_IMAGE}
 
 # Makes sure LuaTex cache is writable
 # -----------------------------------

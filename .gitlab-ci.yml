@@ -8,11 +8,9 @@ stages:
 
 variables:
   DOCKER_DRIVER: overlay2
-  # Use TLS for client <-> dind to avoid exposing an unauthenticated Docker API.
-  DOCKER_HOST: "tcp://docker:2376"
-  DOCKER_TLS_CERTDIR: "/certs"
-  DOCKER_TLS_VERIFY: "1"
-  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  # Standard GitLab dind configuration.
+  DOCKER_HOST: "tcp://docker:2375"
+  DOCKER_TLS_CERTDIR: ""
   # Change these to your registry and namespace
   REGISTRY: "$CI_REGISTRY"
   IMAGE_PATH: "$CI_REGISTRY_IMAGE"
@@ -23,24 +21,23 @@ variables:
   stage: build
   image: docker:24.0.0
   services:
-    - name: docker:24.0.0-dind
-      alias: docker
-      command:
-        - "--insecure-registry=registry.gitlab.pri-os.de"
+    - docker:24.0.0-dind
   before_script:
     - until docker info >/dev/null 2>&1; do echo "Waiting for Docker daemon..."; sleep 2; done
     - docker info
     - echo "Logging into registry $CI_REGISTRY"
     - |
-      if ! echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"; then
-        echo "HTTPS registry login failed, writing auth config for insecure registry flow"
-        REGISTRY_NO_SCHEME="${CI_REGISTRY#https://}"
-        REGISTRY_NO_SCHEME="${REGISTRY_NO_SCHEME#http://}"
-        mkdir -p "$HOME/.docker"
-        AUTH_B64="$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')"
-        printf '{"auths":{"%s":{"auth":"%s"}}}\n' "$REGISTRY_NO_SCHEME" "$AUTH_B64" > "$HOME/.docker/config.json"
-        echo "Docker auth config created for ${REGISTRY_NO_SCHEME}"
-      fi
+      for attempt in 1 2 3; do
+        if echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"; then
+          break
+        fi
+        if [ "$attempt" -eq 3 ]; then
+          echo "Docker login failed after 3 attempts"
+          exit 1
+        fi
+        echo "Docker login failed, retrying in 5s (attempt $attempt/3)"
+        sleep 5
+      done
   after_script:
     - docker logout $CI_REGISTRY || true
 
@@ -52,7 +49,7 @@ build:base:
     - |
       docker build \
         -f server-ce/Dockerfile-base \
-        --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk./sites/ctan.org./systems/texlive/tlnet \
+        --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet \
         -t "$IMAGE_BASE:$CI_COMMIT_SHA" \
         -t "$IMAGE_BASE:latest" \
         -t "$IMAGE_BASE:$CI_COMMIT_REF_SLUG" \
@@ -117,7 +114,7 @@ build:custom:
         fi
         docker build \
           -f "$TEMP_DOCKERFILE" \
-          --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk./sites/ctan.org./systems/texlive/tlnet \
+          --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet \
           -t "$IMAGE_BASE:custom-$CI_COMMIT_SHA" \
           -t "$IMAGE_BASE:custom-latest" \
           .
@@ -143,7 +140,7 @@ publish:helm:
   image: alpine:latest
   before_script:
     - apk add --no-cache curl grep git
-    - curl https://raw.githubusercontent.com./helm/helm/main/scripts/get-helm-3 | bash
+    - curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
   script:
     - echo "Packaging Helm chart..."
     - |
