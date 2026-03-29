@@ -8,9 +8,11 @@ stages:
 
 variables:
   DOCKER_DRIVER: overlay2
-  # Use non-TLS Docker-in-Docker endpoint inside CI network.
-  DOCKER_HOST: "tcp://docker:2375"
-  DOCKER_TLS_CERTDIR: ""
+  # Use TLS for client <-> dind to avoid exposing an unauthenticated Docker API.
+  DOCKER_HOST: "tcp://docker:2376"
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_TLS_VERIFY: "1"
+  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
   # Change these to your registry and namespace
   REGISTRY: "$CI_REGISTRY"
   IMAGE_PATH: "$CI_REGISTRY_IMAGE"
@@ -26,9 +28,16 @@ variables:
       command:
         - "--insecure-registry=registry.gitlab.pri-os.de"
   before_script:
+    - until docker info >/dev/null 2>&1; do echo "Waiting for Docker daemon..."; sleep 2; done
     - docker info
     - echo "Logging into registry $CI_REGISTRY"
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - |
+      if ! echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"; then
+        echo "HTTPS registry login failed, retrying with explicit HTTP for insecure registry"
+        REGISTRY_NO_SCHEME="${CI_REGISTRY#https://}"
+        REGISTRY_NO_SCHEME="${REGISTRY_NO_SCHEME#http://}"
+        echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "http://${REGISTRY_NO_SCHEME}"
+      fi
   after_script:
     - docker logout $CI_REGISTRY || true
 
