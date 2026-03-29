@@ -27,7 +27,7 @@ variables:
   before_script:
     - echo "Logging into registry $CI_REGISTRY"
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY" || true
-     - |
+    - |
        mkdir -p /etc/docker
        echo '{
          "registry-mirrors": [
