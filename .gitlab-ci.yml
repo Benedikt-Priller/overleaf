@@ -8,11 +8,9 @@ stages:
 
 variables:
   DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: "/certs"
-  # For private registries with self-signed certs, set DOCKER_TLS_VERIFY=0
-  # Or mount CA certificate at /etc/docker/certs.d/<registry>/ca.crt
-  DOCKER_TLS_VERIFY: 0  # Set to 1 if using valid certificates
-  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  # Use non-TLS Docker-in-Docker endpoint inside CI network.
+  DOCKER_HOST: "tcp://docker:2375"
+  DOCKER_TLS_CERTDIR: ""
   # Change these to your registry and namespace
   REGISTRY: "$CI_REGISTRY"
   IMAGE_PATH: "$CI_REGISTRY_IMAGE"
@@ -23,20 +21,14 @@ variables:
   stage: build
   image: docker:24.0.0
   services:
-    - docker:24.0.0-dind
+    - name: docker:24.0.0-dind
+      alias: docker
+      command:
+        - "--insecure-registry=registry.gitlab.pri-os.de"
   before_script:
+    - docker info
     - echo "Logging into registry $CI_REGISTRY"
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY" || true
-    - |
-       mkdir -p /etc/docker
-       echo '{
-         "registry-mirrors": [
-           "https://mirror.aliyun.com.",
-           "https://docker.mirrors.ustc.edu.cn."
-         ]
-       }' > /etc/docker/daemon.json
-       killall dockerd
-       sleep 2
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   after_script:
     - docker logout $CI_REGISTRY || true
 
