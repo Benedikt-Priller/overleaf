@@ -21,7 +21,9 @@ variables:
   stage: build
   image: docker:24.0.0
   services:
-    - docker:24.0.0-dind
+    - name: docker:24.0.0-dind
+      command:
+        - "--max-concurrent-uploads=1"
   before_script:
     - until docker info >/dev/null 2>&1; do echo "Waiting for Docker daemon..."; sleep 2; done
     - docker info
@@ -38,6 +40,22 @@ variables:
         echo "Docker login failed, retrying in 5s (attempt $attempt/3)"
         sleep 5
       done
+    - |
+      push_with_retry() {
+        image="$1"
+        for attempt in 1 2 3 4 5; do
+          if docker push "$image"; then
+            return 0
+          fi
+          if [ "$attempt" -eq 5 ]; then
+            echo "docker push failed for $image after 5 attempts"
+            return 1
+          fi
+          wait_seconds=$((attempt * 10))
+          echo "docker push failed for $image, retrying in ${wait_seconds}s (attempt $attempt/5)"
+          sleep "$wait_seconds"
+        done
+      }
   after_script:
     - docker logout $CI_REGISTRY || true
 
@@ -54,9 +72,9 @@ build:base:
         -t "$IMAGE_BASE:latest" \
         -t "$IMAGE_BASE:$CI_COMMIT_REF_SLUG" \
         .
-    - docker push "$IMAGE_BASE:$CI_COMMIT_SHA"
-    - docker push "$IMAGE_BASE:latest"
-    - docker push "$IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+    - push_with_retry "$IMAGE_BASE:$CI_COMMIT_SHA"
+    - push_with_retry "$IMAGE_BASE:latest"
+    - push_with_retry "$IMAGE_BASE:$CI_COMMIT_REF_SLUG"
   only:
     changes:
       - "server-ce/Dockerfile-base"
@@ -85,9 +103,9 @@ build:final:
         -t "$IMAGE_FINAL:latest" \
         -t "$IMAGE_FINAL:$CI_COMMIT_REF_SLUG" \
         .
-    - docker push "$IMAGE_FINAL:$CI_COMMIT_SHA"
-    - docker push "$IMAGE_FINAL:latest"
-    - docker push "$IMAGE_FINAL:$CI_COMMIT_REF_SLUG"
+    - push_with_retry "$IMAGE_FINAL:$CI_COMMIT_SHA"
+    - push_with_retry "$IMAGE_FINAL:latest"
+    - push_with_retry "$IMAGE_FINAL:$CI_COMMIT_REF_SLUG"
   only:
     - branches
     - tags
@@ -124,10 +142,10 @@ build:custom:
           -t "$IMAGE_FINAL:custom-$CI_COMMIT_SHA" \
           -t "$IMAGE_FINAL:custom-latest" \
           .
-        docker push "$IMAGE_BASE:custom-$CI_COMMIT_SHA"
-        docker push "$IMAGE_BASE:custom-latest"
-        docker push "$IMAGE_FINAL:custom-$CI_COMMIT_SHA"
-        docker push "$IMAGE_FINAL:custom-latest"
+        push_with_retry "$IMAGE_BASE:custom-$CI_COMMIT_SHA"
+        push_with_retry "$IMAGE_BASE:custom-latest"
+        push_with_retry "$IMAGE_FINAL:custom-$CI_COMMIT_SHA"
+        push_with_retry "$IMAGE_FINAL:custom-latest"
         rm "$TEMP_DOCKERFILE"
       fi
   only:
