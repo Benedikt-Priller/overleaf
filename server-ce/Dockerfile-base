@@ -96,33 +96,56 @@ RUN set -eux; \
 RUN set -eux; \
     TEXLIVE_REPO="${TEXLIVE_MIRROR}"; \
     if [ -f /tmp/texlive-mirror ]; then TEXLIVE_REPO="$(cat /tmp/texlive-mirror)"; fi; \
-    TEXLIVE_PACKAGES=" \
-      latexmk texcount synctex etoolbox xetex \
-      amsfonts amsmath amssymb babel babelbib beamer bidi bookmark booktabs breakurl caption cite color colortbl csquotes enumitem eso-pic etoc \
-      fancyhdr fancyvrb fontspec float fontawesome5 geometry glossaries graphicx grffile graphics hyperref iftex inputenc kantlipsum lastpage \
-      listings lmodern logreq makechap makeindex marginnote marvosym mathtools microtype minted natbib notoccite palatino paralist parskip \
-      pdfpages pgf polyglossia preview ragged2e soul splitindex subfig table template texshade tgbonum tgcadm tgcursor tgheros tgpagella \
-      tikz tikzmark titlesec tocloft todonotes unicode-math units url utopia varwidth verbatim wasysym wrapfig xcolor xkeyval"; \
     INSTALL_OK=""; \
     for repo in "${TEXLIVE_REPO}" ${TEXLIVE_FALLBACK_MIRRORS}; do \
-      echo "Installing TeX packages from ${repo}"; \
-      if tlmgr install --no-execute-actions --repository "${repo}" ${TEXLIVE_PACKAGES} 2>&1 | tee /tmp/tlmgr-install.log; then \
+                  echo "Installing TeX package group 1 from ${repo}"; \
+                  if tlmgr install --no-execute-actions --repository "${repo}" \
+                        latexmk texcount synctex etoolbox xetex \
+                        amsfonts amsmath amssymb babel babelbib beamer bidi bookmark booktabs breakurl caption cite color colortbl csquotes enumitem eso-pic etoc \
+                        fancyhdr fancyvrb fontspec float fontawesome5 geometry glossaries graphicx grffile graphics hyperref iftex inputenc \
+                        kantlipsum lastpage listings lmodern logreq makechap makeindex marginnote marvosym mathtools microtype minted \
+                        natbib notoccite palatino paralist parskip pdfpages pgf polyglossia preview \
+                        2>&1 | tee /tmp/tlmgr-install.log; then \
         INSTALL_OK="1"; \
         break; \
       fi; \
-      LAST_EXIT=$?; \
-      if [ $LAST_EXIT -eq 0 ] || grep -q "package already present" /tmp/tlmgr-install.log; then \
+                  if grep -q "package already present" /tmp/tlmgr-install.log; then \
         INSTALL_OK="1"; \
         break; \
       fi; \
     done; \
     if [ -z "${INSTALL_OK}" ]; then \
-      echo "Failed to install common TeX packages from all configured repositories"; \
+                  echo "Failed to install TeX package group 1 from all configured repositories"; \
       exit 1; \
-    fi; \
-    mktexlsr || true; \
-    updmap-sys || true; \
-    rm -f /tmp/texlive-mirror /tmp/tlmgr-install.log
+            fi
+
+RUN set -eux; \
+            TEXLIVE_REPO="${TEXLIVE_MIRROR}"; \
+            if [ -f /tmp/texlive-mirror ]; then TEXLIVE_REPO="$(cat /tmp/texlive-mirror)"; fi; \
+            INSTALL_OK=""; \
+            for repo in "${TEXLIVE_REPO}" ${TEXLIVE_FALLBACK_MIRRORS}; do \
+                  echo "Installing TeX package group 2 from ${repo}"; \
+                  if tlmgr install --no-execute-actions --repository "${repo}" \
+                        ragged2e soul splitindex subfig table template texshade tgbonum tgcadm tgcursor tgheros tgpagella \
+                        tikz tikzmark titlesec tocloft todonotes unicode-math units url utopia varwidth verbatim wasysym wrapfig xcolor xkeyval \
+                        2>&1 | tee /tmp/tlmgr-install.log; then \
+                        INSTALL_OK="1"; \
+                        break; \
+                  fi; \
+                  if grep -q "package already present" /tmp/tlmgr-install.log; then \
+                        INSTALL_OK="1"; \
+                        break; \
+                  fi; \
+            done; \
+            if [ -z "${INSTALL_OK}" ]; then \
+                  echo "Failed to install TeX package group 2 from all configured repositories"; \
+                  exit 1; \
+            fi
+
+RUN set -eux; \
+            mktexlsr || true; \
+            updmap-sys || true; \
+            rm -f /tmp/texlive-mirror /tmp/tlmgr-install.log
 
 
 # Set up overleaf user and home directory
