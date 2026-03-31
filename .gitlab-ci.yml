@@ -89,6 +89,23 @@ validate:lint:
         sleep 5
       done
     - |
+      docker_build_with_retry() {
+        local dockerfile="$1"
+        shift  # Remove first argument, rest are docker build args
+        for attempt in 1 2 3 4; do
+          if docker build -f "$dockerfile" "$@"; then
+            return 0
+          fi
+          if [ "$attempt" -eq 4 ]; then
+            echo "docker build failed after 4 attempts"
+            return 1
+          fi
+          wait_seconds=$((attempt * 30))
+          echo "docker build failed, retrying in ${wait_seconds}s (attempt $attempt/4)"
+          sleep "$wait_seconds"
+        done
+      }
+    - |
       push_repo_with_retry() {
         repo="$1"
         for attempt in 1 2 3 4 5 6 7 8; do
@@ -114,8 +131,7 @@ build:base:
     - echo "Building base Docker image..."
     - |
       docker pull "$IMAGE_BASE:latest" || true
-      docker build \
-        -f server-ce/Dockerfile-base \
+      docker_build_with_retry server-ce/Dockerfile-base \
         --cache-from "$IMAGE_BASE:latest" \
         --build-arg BUILDKIT_INLINE_CACHE=1 \
         --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet \
@@ -179,8 +195,7 @@ build:final:
       fi
       docker pull "$BASE_IMAGE_TAG" || true
       docker pull "$IMAGE_FINAL:latest" || true
-      docker build \
-        -f server-ce/Dockerfile \
+      docker_build_with_retry server-ce/Dockerfile \
         --cache-from "$IMAGE_FINAL:latest" \
         --build-arg BUILDKIT_INLINE_CACHE=1 \
         --build-arg OVERLEAF_BASE_TAG="$BASE_IMAGE_TAG" \
@@ -210,8 +225,7 @@ build:custom:
           sed -i '$ s/ \\$//' "$TEMP_DOCKERFILE"
         fi
         docker pull "$IMAGE_BASE:custom-latest" || true
-        docker build \
-          -f "$TEMP_DOCKERFILE" \
+        docker_build_with_retry "$TEMP_DOCKERFILE" \
           --cache-from "$IMAGE_BASE:custom-latest" \
           --build-arg BUILDKIT_INLINE_CACHE=1 \
           --build-arg TEXLIVE_MIRROR=https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet \
@@ -219,8 +233,7 @@ build:custom:
           -t "$IMAGE_BASE:custom-latest" \
           .
         docker pull "$IMAGE_FINAL:custom-latest" || true
-        docker build \
-          -f server-ce/Dockerfile \
+        docker_build_with_retry server-ce/Dockerfile \
           --cache-from "$IMAGE_FINAL:custom-latest" \
           --build-arg BUILDKIT_INLINE_CACHE=1 \
           --build-arg OVERLEAF_BASE_TAG="$IMAGE_BASE:custom-$CI_COMMIT_SHA" \
