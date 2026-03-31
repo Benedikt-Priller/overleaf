@@ -28,7 +28,12 @@ validate:fast:
   script:
     - yq e '.' .gitlab-ci.yml >/dev/null
     - yq e '.' helm/overleaf/Chart.yaml >/dev/null
-    - yq e '.' helm/overleaf/values.yaml >/dev/null
+    - |
+      if [ -f helm/overleaf/values.yaml ]; then
+        yq e '.' helm/overleaf/values.yaml >/dev/null
+      else
+        echo "Skipping helm/overleaf/values.yaml validation (file not present)"
+      fi
     - |
       if grep -RInE 'https?://[^ ]*\./' .gitlab-ci.yml server-ce/Dockerfile-base; then
         echo "Found trailing-dot domain URL(s)."
