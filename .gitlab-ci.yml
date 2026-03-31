@@ -71,9 +71,18 @@ validate:lint:
     - name: docker:24.0.0-dind
       command:
         - "--max-concurrent-uploads=1"
+        - "--storage-driver=overlay2"
+        - "--log-driver=none"
   before_script:
     - apk add --no-cache git
     - until docker info >/dev/null 2>&1; do echo "Waiting for Docker daemon..."; sleep 2; done
+    - echo "=== Pre-build aggressive cleanup ==="
+    - |
+      df -h /var/lib/docker || true
+      docker system prune -af --volumes || true
+      docker system df || true
+      echo "Space available after pre-cleanup:"
+      df -h /var/lib/docker || true
     - docker info
     - echo "Logging into registry $CI_REGISTRY"
     - |
@@ -298,8 +307,17 @@ test:compile:
     - name: docker:24.0.0-dind
       command:
         - "--max-concurrent-uploads=1"
+        - "--storage-driver=overlay2"
+        - "--log-driver=none"
   before_script:
     - until docker info >/dev/null 2>&1; do echo "Waiting for Docker daemon..."; sleep 2; done
+    - echo "=== Pre-test aggressive cleanup ==="
+    - |
+      df -h /var/lib/docker || true
+      docker system prune -af --volumes || true
+      docker system df || true
+      echo "Space available after pre-cleanup:"
+      df -h /var/lib/docker || true
     - |
       for attempt in 1 2 3; do
         if echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"; then
