@@ -65,6 +65,45 @@ in which to run the Overleaf services. Baseimage uses the `runit` service
 manager to manage services, and we add our init-scripts from the `server-ce/runit`
 folder.
 
+## LaTeX Package Auto-Install
+
+This repository includes automatic LaTeX package installation during compilation.
+
+### What is included
+
+1. Wrapper scripts in `server-ce/bin/*-autoinst` for `latex`, `pdflatex`, `xelatex`, and `lualatex`.
+2. `latexmk` integration via `server-ce/config/latexmkrc-advanced`.
+3. Pre-installed common packages in `server-ce/Dockerfile-base` to reduce first-compile latency.
+
+### Behavior
+
+1. Compilation runs through an `*-autoinst` wrapper.
+2. Missing package errors are detected.
+3. `tlmgr` installs missing packages from the configured mirror.
+4. Compilation retries automatically.
+
+### Configuration
+
+Use `TEXLIVE_MIRROR` to control the TeX Live repository:
+
+```bash
+TEXLIVE_MIRROR=https://mirror.ctan.org/systems/texlive/tlnet
+```
+
+For image builds, pass it as a build argument:
+
+```bash
+docker build -f server-ce/Dockerfile-base \
+  --build-arg TEXLIVE_MIRROR=https://mirror.ctan.org/systems/texlive/tlnet \
+  -t sharelatex/sharelatex-base:latest .
+```
+
+### Operational Notes
+
+1. First compilation of a document with new packages is slower due to download/install.
+2. Persist TeX Live directories if you want installed packages to survive restarts.
+3. For production, pre-install frequent packages in `server-ce/Dockerfile-base`.
+
 ## Contributing
 
 Please see the [CONTRIBUTING](CONTRIBUTING.md) file for information on contributing to the development of Overleaf.
