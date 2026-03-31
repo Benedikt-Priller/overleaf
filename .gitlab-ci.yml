@@ -122,7 +122,20 @@ validate:lint:
         done
       }
   after_script:
-    - docker logout $CI_REGISTRY || true
+    - |
+      echo "=== Docker Cleanup: Pre-cleanup disk usage ==="
+      df -h /var/lib/docker || true
+      docker system df || true
+      echo "=== Stopping and removing all containers ==="
+      docker stop $(docker ps -aq) || true
+      docker rm -f $(docker ps -aq) || true
+      echo "=== Removing all dangling images and volumes ==="
+      docker system prune -af --volumes || true
+      echo "=== Docker Cleanup: Post-cleanup disk usage ==="
+      df -h /var/lib/docker || true
+      docker system df || true
+      echo "=== Logging out from registry ==="
+      docker logout $CI_REGISTRY || true
 
 # Build base image with standard packages
 build:base:
@@ -374,7 +387,20 @@ test:compile:
         exit 1
       fi
   after_script:
-    - docker logout $CI_REGISTRY || true
+    - |
+      echo "=== Docker Cleanup: Pre-cleanup disk usage ==="
+      df -h /var/lib/docker || true
+      docker system df || true
+      echo "=== Stopping and removing all containers ==="
+      docker stop $(docker ps -aq) || true
+      docker rm -f $(docker ps -aq) || true
+      echo "=== Removing all dangling images and volumes ==="
+      docker system prune -af --volumes || true
+      echo "=== Docker Cleanup: Post-cleanup disk usage ==="
+      df -h /var/lib/docker || true
+      docker system df || true
+      echo "=== Logging out from registry ==="
+      docker logout $CI_REGISTRY || true
   artifacts:
     paths:
       - /tmp/test-compile/test.pdf
