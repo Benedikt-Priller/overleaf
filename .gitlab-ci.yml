@@ -5,6 +5,7 @@ stages:
   - validate
   - build
   - publish
+  - test
   - helm
 
 variables:
@@ -38,6 +39,24 @@ validate:fast:
       if grep -RInE 'https?://[^ ]*\./' .gitlab-ci.yml server-ce/Dockerfile-base; then
         echo "Found trailing-dot domain URL(s)."
         exit 1
+      fi
+  only:
+    - branches
+    - tags
+    - merge_requests
+
+validate:lint:
+  stage: validate
+  image: cytopia/yamllint:latest
+  interruptible: true
+  script:
+    - |
+      LINT_CONFIG='{extends: default, rules: {line-length: disable, truthy: disable}}'
+      yamllint -d "$LINT_CONFIG" .gitlab-ci.yml helm/overleaf/Chart.yaml
+      if [ -f helm/overleaf/values.yaml ]; then
+        yamllint -d "$LINT_CONFIG" helm/overleaf/values.yaml
+      else
+        echo "Skipping helm/overleaf/values.yaml lint (file not present)"
       fi
   only:
     - branches
@@ -247,8 +266,26 @@ publish:helm:
 
 # Performance test - compile a test document
 test:compile:
-  stage: build
-  image: "$IMAGE_FINAL:$CI_COMMIT_SHA"
+  stage: test
+  image: docker:24.0.0
+  services:
+    - name: docker:24.0.0-dind
+      command:
+        - "--max-concurrent-uploads=1"
+  before_script:
+    - until docker info >/dev/null 2>&1; do echo "Waiting for Docker daemon..."; sleep 2; done
+    - |
+      for attempt in 1 2 3; do
+        if echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"; then
+          break
+        fi
+        if [ "$attempt" -eq 3 ]; then
+          echo "Docker login failed after 3 attempts"
+          exit 1
+        fi
+        echo "Docker login failed, retrying in 5s (attempt $attempt/3)"
+        sleep 5
+      done
   needs:
     - job: build:final
       optional: true
@@ -273,29 +310,58 @@ test:compile:
   script:
     - echo "Testing LaTeX compilation with auto-install..."
     - |
+      pull_with_retry() {
+        image="$1"
+        for attempt in 1 2 3 4 5; do
+          if docker pull "$image"; then
+            return 0
+          fi
+          if [ "$attempt" -eq 5 ]; then
+            echo "docker pull failed for $image after 5 attempts"
+            return 1
+          fi
+          wait_seconds=$((attempt * 15))
+          echo "docker pull failed for $image, retrying in ${wait_seconds}s (attempt $attempt/5)"
+          sleep "$wait_seconds"
+        done
+      }
+
+      pull_with_retry "$IMAGE_FINAL:$CI_COMMIT_SHA"
+
+      CID=$(docker create "$IMAGE_FINAL:$CI_COMMIT_SHA" sh -lc '
+        mkdir -p /tmp/test-compile
+        cd /tmp/test-compile
+        cat > test.tex << "EOF"
+        \\documentclass{article}
+        \\usepackage{glossaries}
+        \\usepackage{minted}
+        \\usepackage{tikz}
+        \\title{AutoInstall Test}
+        \\author{GitLab CI}
+        \\begin{document}
+        \\maketitle
+        \\section{Introduction}
+        Testing automatic package installation.
+        \\end{document}
+        EOF
+        latexmk -pdf -interaction=nonstopmode test.tex || true
+      ')
+
+      docker start -a "$CID" || true
+
       mkdir -p /tmp/test-compile
-      cd /tmp/test-compile
-      cat > test.tex << 'EOF'
-      \documentclass{article}
-      \usepackage{glossaries}
-      \usepackage{minted}
-      \usepackage{tikz}
-      \title{AutoInstall Test}
-      \author{GitLab CI}
-      \begin{document}
-      \maketitle
-      \section{Introduction}
-      Testing automatic package installation.
-      \end{document}
-      EOF
-      latexmk -pdf -interaction=nonstopmode test.tex || true
-      if [ -f test.pdf ]; then
+      docker cp "$CID:/tmp/test-compile/test.pdf" /tmp/test-compile/test.pdf || true
+      docker rm -f "$CID" >/dev/null 2>&1 || true
+
+      if [ -f /tmp/test-compile/test.pdf ]; then
         echo "Compilation successful!"
-        ls -lh test.pdf
+        ls -lh /tmp/test-compile/test.pdf
       else
         echo "Compilation failed"
         exit 1
       fi
+  after_script:
+    - docker logout $CI_REGISTRY || true
   artifacts:
     paths:
       - /tmp/test-compile/test.pdf
