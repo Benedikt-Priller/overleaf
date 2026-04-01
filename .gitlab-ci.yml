@@ -283,9 +283,13 @@ publish:helm:
       cd helm/overleaf
       sed -i "s/version: .*/version: 0.1.0-$CI_COMMIT_SHORT_SHA/" Chart.yaml
       sed -i "s/appVersion: .*/appVersion: $CI_COMMIT_SHORT_SHA/" Chart.yaml
-      sed -i "s|registry:.*|$REGISTRY|" values.yaml
-      sed -i "s|repository:.*|$IMAGE_PATH/sharelatex|" values.yaml
-      sed -i "s|tag:.*|$CI_COMMIT_SHORT_SHA|" values.yaml
+      if [ -f values.yaml ]; then
+        sed -i "s|registry:.*|$REGISTRY|" values.yaml
+        sed -i "s|repository:.*|$IMAGE_PATH/sharelatex|" values.yaml
+        sed -i "s|tag:.*|$CI_COMMIT_SHORT_SHA|" values.yaml
+      else
+        echo "Skipping values.yaml update (file not present)"
+      fi
       helm package . --destination ../../
       cd /builds/$CI_PROJECT_PATH
     - echo "Publishing to Package Registry..."

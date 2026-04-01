@@ -1,0 +1,29 @@
+# Default values for overleaf chart
+
+replicaCount: 1
+
+# Kept as top-level keys to match CI replacement logic in .gitlab-ci.yml
+registry: registry.gitlab.pri-os.de
+repository: benedikt-priller/overleaf/sharelatex
+tag: latest
+pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+podSecurityContext: {}
+securityContext: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
