@@ -392,13 +392,14 @@ test:compile:
         Testing automatic package installation.
         \\end{document}
         EOF
-        latexmk -pdf -interaction=nonstopmode test.tex || true
+        latexmk -pdf -shell-escape -interaction=nonstopmode test.tex || true
       ')
 
       docker start -a "$CID" || true
 
       mkdir -p /tmp/test-compile
       docker cp "$CID:/tmp/test-compile/test.pdf" /tmp/test-compile/test.pdf || true
+      docker cp "$CID:/tmp/test-compile/test.log" /tmp/test-compile/test.log || true
       docker rm -f "$CID" >/dev/null 2>&1 || true
 
       if [ -f /tmp/test-compile/test.pdf ]; then
@@ -406,6 +407,10 @@ test:compile:
         ls -lh /tmp/test-compile/test.pdf
       else
         echo "Compilation failed"
+        if [ -f /tmp/test-compile/test.log ]; then
+          echo "=== Last 200 lines of test.log ==="
+          tail -n 200 /tmp/test-compile/test.log || true
+        fi
         exit 1
       fi
   after_script:
@@ -426,6 +431,7 @@ test:compile:
   artifacts:
     paths:
       - /tmp/test-compile/test.pdf
+      - /tmp/test-compile/test.log
     expire_in: 1 week
 # SAST Security scanning
 security:container-scan:
