@@ -381,6 +381,9 @@ test:compile:
 
       pull_with_retry "$IMAGE_FINAL:$CI_COMMIT_SHA"
 
+      OUT_DIR="$CI_PROJECT_DIR/test-compile"
+      mkdir -p "$OUT_DIR"
+
       CID=$(docker create --entrypoint /bin/sh "$IMAGE_FINAL:$CI_COMMIT_SHA" -c '
         mkdir -p /tmp/test-compile
         cd /tmp/test-compile
@@ -397,39 +400,45 @@ test:compile:
         Testing automatic package installation.
         \\end{document}
         EOF
-        latexmk -pdf -shell-escape -interaction=nonstopmode test.tex || true
+        latexmk -pdf -shell-escape -interaction=nonstopmode test.tex
       ')
 
       docker start -a "$CID" || true
       CONTAINER_EXIT_CODE=$(docker inspect "$CID" --format='{{.State.ExitCode}}' 2>/dev/null || echo "unknown")
       echo "Test container exit code: $CONTAINER_EXIT_CODE"
 
-      mkdir -p /tmp/test-compile
-      docker cp "$CID:/tmp/test-compile/test.pdf" /tmp/test-compile/test.pdf || true
-      docker cp "$CID:/tmp/test-compile/test.log" /tmp/test-compile/test.log || true
-      docker rm -f "$CID" >/dev/null 2>&1 || true
+      docker cp "$CID:/tmp/test-compile/test.pdf" "$OUT_DIR/test.pdf" || true
+      docker cp "$CID:/tmp/test-compile/test.log" "$OUT_DIR/test.log" || true
 
-      if [ -f /tmp/test-compile/test.pdf ]; then
+      if [ "$CONTAINER_EXIT_CODE" = "0" ] && [ -f "$OUT_DIR/test.pdf" ]; then
         echo "Compilation successful!"
-        ls -lh /tmp/test-compile/test.pdf
+        ls -lh "$OUT_DIR/test.pdf"
       else
         echo "Compilation failed"
+        echo "Container exit code: $CONTAINER_EXIT_CODE"
         echo "Attempting to show container stdout/stderr for debugging..."
         docker logs "$CID" || true
-        if [ -f /tmp/test-compile/test.log ]; then
+        if [ -f "$OUT_DIR/test.log" ]; then
           echo "=== Last 200 lines of test.log ==="
-          tail -n 200 /tmp/test-compile/test.log || true
+          tail -n 200 "$OUT_DIR/test.log" || true
         fi
+        docker rm -f "$CID" >/dev/null 2>&1 || true
         exit 1
       fi
+      docker rm -f "$CID" >/dev/null 2>&1 || true
   after_script:
     - |
       echo "=== Docker Cleanup: Pre-cleanup disk usage ==="
       df -h /var/lib/docker || true
       docker system df || true
       echo "=== Stopping and removing all containers ==="
-      docker stop $(docker ps -aq) || true
-      docker rm -f $(docker ps -aq) || true
+      CONTAINERS=$(docker ps -aq)
+      if [ -n "$CONTAINERS" ]; then
+        docker stop $CONTAINERS || true
+        docker rm -f $CONTAINERS || true
+      else
+        echo "No containers to stop/remove"
+      fi
       echo "=== Removing all dangling images and volumes ==="
       docker system prune -af --volumes || true
       echo "=== Docker Cleanup: Post-cleanup disk usage ==="
@@ -439,8 +448,8 @@ test:compile:
       docker logout $CI_REGISTRY || true
   artifacts:
     paths:
-      - /tmp/test-compile/test.pdf
-      - /tmp/test-compile/test.log
+      - test-compile/test.pdf
+      - test-compile/test.log
     expire_in: 1 week
 # SAST Security scanning
 security:container-scan:
