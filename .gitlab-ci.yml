@@ -136,8 +136,13 @@ validate:lint:
       df -h /var/lib/docker || true
       docker system df || true
       echo "=== Stopping and removing all containers ==="
-      docker stop $(docker ps -aq) || true
-      docker rm -f $(docker ps -aq) || true
+      CONTAINERS=$(docker ps -aq)
+      if [ -n "$CONTAINERS" ]; then
+        docker stop $CONTAINERS || true
+        docker rm -f $CONTAINERS || true
+      else
+        echo "No containers to stop/remove"
+      fi
       echo "=== Removing all dangling images and volumes ==="
       docker system prune -af --volumes || true
       echo "=== Docker Cleanup: Post-cleanup disk usage ==="
@@ -376,7 +381,7 @@ test:compile:
 
       pull_with_retry "$IMAGE_FINAL:$CI_COMMIT_SHA"
 
-      CID=$(docker create --entrypoint /bin/sh "$IMAGE_FINAL:$CI_COMMIT_SHA" -lc '
+      CID=$(docker create --entrypoint /bin/sh "$IMAGE_FINAL:$CI_COMMIT_SHA" -c '
         mkdir -p /tmp/test-compile
         cd /tmp/test-compile
         cat > test.tex << "EOF"
@@ -396,6 +401,8 @@ test:compile:
       ')
 
       docker start -a "$CID" || true
+      CONTAINER_EXIT_CODE=$(docker inspect "$CID" --format='{{.State.ExitCode}}' 2>/dev/null || echo "unknown")
+      echo "Test container exit code: $CONTAINER_EXIT_CODE"
 
       mkdir -p /tmp/test-compile
       docker cp "$CID:/tmp/test-compile/test.pdf" /tmp/test-compile/test.pdf || true
@@ -407,6 +414,8 @@ test:compile:
         ls -lh /tmp/test-compile/test.pdf
       else
         echo "Compilation failed"
+        echo "Attempting to show container stdout/stderr for debugging..."
+        docker logs "$CID" || true
         if [ -f /tmp/test-compile/test.log ]; then
           echo "=== Last 200 lines of test.log ==="
           tail -n 200 /tmp/test-compile/test.log || true
