@@ -103,7 +103,7 @@ RUN set -eux; \
                         latexmk texcount synctex etoolbox xetex \
                         amsfonts amsmath amssymb babel babelbib beamer bidi bookmark booktabs breakurl caption cite color colortbl csquotes enumitem eso-pic etoc \
                         fancyhdr fancyvrb fontspec float fontawesome5 geometry glossaries graphicx grffile graphics hyperref iftex inputenc \
-                        kantlipsum lastpage listings lmodern logreq makechap makeindex marginnote marvosym mathtools microtype minted \
+                        kantlipsum koma-script lastpage listings lmodern logreq makechap makeindex marginnote marvosym mathtools microtype minted \
                         natbib notoccite palatino paralist parskip pdfpages pgf polyglossia preview \
                         2>&1 | tee /tmp/tlmgr-install.log; then \
         INSTALL_OK="1"; \
