@@ -10,9 +10,12 @@ MAX_ATTEMPTS=3
 ATTEMPT=0
 INSTALLED_PACKAGES=()
 
-if ! PDFLATEX_BIN="$(command -v pdflatex 2>/dev/null)"; then
-    echo "===== AutoInstall: pdflatex not found in PATH =====" >&2
-    exit 127
+PDFLATEX_BIN="${PDFLATEX_REAL_BIN:-}"
+if [ -z "$PDFLATEX_BIN" ]; then
+    if ! PDFLATEX_BIN="$(command -v pdflatex 2>/dev/null)"; then
+        echo "===== AutoInstall: pdflatex not found in PATH =====" >&2
+        exit 127
+    fi
 fi
 
 # Extract package name from LaTeX error message

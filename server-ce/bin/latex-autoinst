@@ -10,9 +10,12 @@ MAX_ATTEMPTS=3
 ATTEMPT=0
 INSTALLED_PACKAGES=()
 
-if ! LATEX_BIN="$(command -v latex 2>/dev/null)"; then
-    echo "===== AutoInstall: latex not found in PATH =====" >&2
-    exit 127
+LATEX_BIN="${LATEX_REAL_BIN:-}"
+if [ -z "$LATEX_BIN" ]; then
+    if ! LATEX_BIN="$(command -v latex 2>/dev/null)"; then
+        echo "===== AutoInstall: latex not found in PATH =====" >&2
+        exit 127
+    fi
 fi
 
 # Extract package name from LaTeX error message
