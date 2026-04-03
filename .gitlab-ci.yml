@@ -390,23 +390,18 @@ test:compile:
         --entrypoint /bin/sh \
         "$IMAGE_FINAL:$CI_COMMIT_SHA" \
         -ec '
-          mkdir -p /tmp/test-compile
-          cd /tmp/test-compile
+          cd /out
           printf "%s\n" \
             "\\documentclass{article}" \
-            "\\usepackage{glossaries}" \
-            "\\usepackage{minted}" \
-            "\\usepackage{tikz}" \
+            "\\usepackage{siunitx}" \
             "\\title{AutoInstall Test}" \
             "\\author{GitLab CI}" \
             "\\begin{document}" \
             "\\maketitle" \
             "\\section{Introduction}" \
-            "Testing automatic package installation." \
+            "Testing automatic package installation for siunitx: \\\\num{12345.678}." \
             "\\end{document}" > test.tex
-          latexmk -pdf -shell-escape -interaction=nonstopmode test.tex > /out/container.log 2>&1
-          cp -f test.log /out/test.log 2>/dev/null || true
-          cp -f test.pdf /out/test.pdf 2>/dev/null || true
+          /usr/local/bin/pdflatex-autoinst -interaction=nonstopmode -halt-on-error test.tex > /out/container.log 2>&1
         ' || CONTAINER_EXIT_CODE=$?
 
       echo "Test container exit code: $CONTAINER_EXIT_CODE"
