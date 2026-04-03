@@ -176,18 +176,7 @@ COPY server-ce/bin/xelatex-autoinst /usr/local/bin/xelatex-autoinst
 COPY server-ce/bin/lualatex-autoinst /usr/local/bin/lualatex-autoinst
 
 RUN set -eux; \
-            chmod +x /usr/local/bin/*-autoinst; \
-            TEXLIVE_YEAR=$(ls -1 /usr/local/texlive/ | grep '^20[0-9][0-9]$' | sort -n | tail -1); \
-            if [ -z "$TEXLIVE_YEAR" ]; then echo "TeX Live not found"; exit 1; fi; \
-            REAL_PDFLATEX="/usr/local/texlive/$TEXLIVE_YEAR/bin/x86_64-linux/pdflatex"; \
-            REAL_LATEX="/usr/local/texlive/$TEXLIVE_YEAR/bin/x86_64-linux/latex"; \
-            REAL_XELATEX="/usr/local/texlive/$TEXLIVE_YEAR/bin/x86_64-linux/xelatex"; \
-            REAL_LUALATEX="/usr/local/texlive/$TEXLIVE_YEAR/bin/x86_64-linux/lualatex"; \
-            printf '#!/bin/sh\nexport PDFLATEX_REAL_BIN="%s"\nexec /usr/local/bin/pdflatex-autoinst "$@"\n' "$REAL_PDFLATEX" > /usr/local/bin/pdflatex; \
-            printf '#!/bin/sh\nexport LATEX_REAL_BIN="%s"\nexec /usr/local/bin/latex-autoinst "$@"\n' "$REAL_LATEX" > /usr/local/bin/latex; \
-            printf '#!/bin/sh\nexport XELATEX_REAL_BIN="%s"\nexec /usr/local/bin/xelatex-autoinst "$@"\n' "$REAL_XELATEX" > /usr/local/bin/xelatex; \
-            printf '#!/bin/sh\nexport LUALATEX_REAL_BIN="%s"\nexec /usr/local/bin/lualatex-autoinst "$@"\n' "$REAL_LUALATEX" > /usr/local/bin/lualatex; \
-            chmod +x /usr/local/bin/pdflatex /usr/local/bin/latex /usr/local/bin/xelatex /usr/local/bin/lualatex
+            chmod +x /usr/local/bin/*-autoinst
 
 # Set up overleaf user and home directory
 # -----------------------------------------

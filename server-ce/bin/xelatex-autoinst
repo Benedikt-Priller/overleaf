@@ -12,10 +12,14 @@ INSTALLED_PACKAGES=()
 
 XELATEX_BIN="${XELATEX_REAL_BIN:-}"
 if [ -z "$XELATEX_BIN" ]; then
-    if ! XELATEX_BIN="$(command -v xelatex 2>/dev/null)"; then
-        echo "===== AutoInstall: xelatex not found in PATH =====" >&2
-        exit 127
-    fi
+    XELATEX_BIN="$(ls -1d /usr/local/texlive/[0-9][0-9][0-9][0-9]/bin/x86_64-linux/xelatex 2>/dev/null | sort -V | tail -1 || true)"
+fi
+if [ -z "$XELATEX_BIN" ]; then
+    XELATEX_BIN="$(command -v xelatex 2>/dev/null || true)"
+fi
+if [ -z "$XELATEX_BIN" ] || [ "$XELATEX_BIN" = "/usr/local/bin/xelatex" ]; then
+    echo "===== AutoInstall: unable to resolve real xelatex binary =====" >&2
+    exit 127
 fi
 
 # Extract package name from LaTeX error message

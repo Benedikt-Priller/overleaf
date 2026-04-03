@@ -12,10 +12,14 @@ INSTALLED_PACKAGES=()
 
 PDFLATEX_BIN="${PDFLATEX_REAL_BIN:-}"
 if [ -z "$PDFLATEX_BIN" ]; then
-    if ! PDFLATEX_BIN="$(command -v pdflatex 2>/dev/null)"; then
-        echo "===== AutoInstall: pdflatex not found in PATH =====" >&2
-        exit 127
-    fi
+    PDFLATEX_BIN="$(ls -1d /usr/local/texlive/[0-9][0-9][0-9][0-9]/bin/x86_64-linux/pdflatex 2>/dev/null | sort -V | tail -1 || true)"
+fi
+if [ -z "$PDFLATEX_BIN" ]; then
+    PDFLATEX_BIN="$(command -v pdflatex 2>/dev/null || true)"
+fi
+if [ -z "$PDFLATEX_BIN" ] || [ "$PDFLATEX_BIN" = "/usr/local/bin/pdflatex" ]; then
+    echo "===== AutoInstall: unable to resolve real pdflatex binary =====" >&2
+    exit 127
 fi
 
 # Extract package name from LaTeX error message

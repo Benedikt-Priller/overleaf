@@ -12,10 +12,14 @@ INSTALLED_PACKAGES=()
 
 LUALATEX_BIN="${LUALATEX_REAL_BIN:-}"
 if [ -z "$LUALATEX_BIN" ]; then
-    if ! LUALATEX_BIN="$(command -v lualatex 2>/dev/null)"; then
-        echo "===== AutoInstall: lualatex not found in PATH =====" >&2
-        exit 127
-    fi
+    LUALATEX_BIN="$(ls -1d /usr/local/texlive/[0-9][0-9][0-9][0-9]/bin/x86_64-linux/lualatex 2>/dev/null | sort -V | tail -1 || true)"
+fi
+if [ -z "$LUALATEX_BIN" ]; then
+    LUALATEX_BIN="$(command -v lualatex 2>/dev/null || true)"
+fi
+if [ -z "$LUALATEX_BIN" ] || [ "$LUALATEX_BIN" = "/usr/local/bin/lualatex" ]; then
+    echo "===== AutoInstall: unable to resolve real lualatex binary =====" >&2
+    exit 127
 fi
 
 # Extract package name from LaTeX error message

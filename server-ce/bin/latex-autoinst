@@ -12,10 +12,14 @@ INSTALLED_PACKAGES=()
 
 LATEX_BIN="${LATEX_REAL_BIN:-}"
 if [ -z "$LATEX_BIN" ]; then
-    if ! LATEX_BIN="$(command -v latex 2>/dev/null)"; then
-        echo "===== AutoInstall: latex not found in PATH =====" >&2
-        exit 127
-    fi
+    LATEX_BIN="$(ls -1d /usr/local/texlive/[0-9][0-9][0-9][0-9]/bin/x86_64-linux/latex 2>/dev/null | sort -V | tail -1 || true)"
+fi
+if [ -z "$LATEX_BIN" ]; then
+    LATEX_BIN="$(command -v latex 2>/dev/null || true)"
+fi
+if [ -z "$LATEX_BIN" ] || [ "$LATEX_BIN" = "/usr/local/bin/latex" ]; then
+    echo "===== AutoInstall: unable to resolve real latex binary =====" >&2
+    exit 127
 fi
 
 # Extract package name from LaTeX error message
