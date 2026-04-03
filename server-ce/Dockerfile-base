@@ -143,10 +143,43 @@ RUN set -eux; \
             fi
 
 RUN set -eux; \
+            TEXLIVE_REPO="${TEXLIVE_MIRROR}"; \
+            if [ -f /tmp/texlive-mirror ]; then TEXLIVE_REPO="$(cat /tmp/texlive-mirror)"; fi; \
+            INSTALL_OK=""; \
+            for repo in "${TEXLIVE_REPO}" ${TEXLIVE_FALLBACK_MIRRORS}; do \
+                  echo "Installing TeX package group 3 (user templates) from ${repo}"; \
+                  if tlmgr install --no-execute-actions --repository "${repo}" \
+                        acronym algorithm2e arydshln array cancel calc chemfig chngcntr comment dsfont eurosym floatflt forest gauss glossaries-light ifthen import lscape longtable makecell mhchem multicol multirow newpxmath nicefrac nicematrix nomencl pdflscape pgfplots relsize scalerel setspace siunitx svg tcolorbox theoremref tikz-cd tikzsymbols todonotes-tcolorbox translations transparent ulem varwidth varioref venndiagram vhistory witharrows xfrac xifthen xspace \
+                        2>&1 | tee /tmp/tlmgr-install.log; then \
+                        INSTALL_OK="1"; \
+                        break; \
+                  fi; \
+                  if grep -q "package already present" /tmp/tlmgr-install.log; then \
+                        INSTALL_OK="1"; \
+                        break; \
+                  fi; \
+            done; \
+            if [ -z "${INSTALL_OK}" ]; then \
+                  echo "Failed to install TeX package group 3 from all configured repositories"; \
+                  exit 1; \
+            fi
+
+RUN set -eux; \
             mktexlsr || true; \
             updmap-sys || true; \
             rm -f /tmp/texlive-mirror /tmp/tlmgr-install.log
 
+# Setup pdflatex-autoinst wrapper to intercept compiler calls and auto-install missing packages
+RUN TEXLIVE_YEAR=$(ls -1 /usr/local/texlive/ | grep '^20[0-9][0-9]$' | sort -n | tail -1) && \
+    if [ -z "$TEXLIVE_YEAR" ]; then echo "TeX Live not found"; exit 1; fi && \
+    REAL_PDFLATEX="/usr/local/texlive/$TEXLIVE_YEAR/bin/x86_64-linux/pdflatex" && \
+    if [ -f "/usr/local/bin/pdflatex-autoinst" ]; then \
+      sed -i "s|PDFLATEX_BIN=.*|PDFLATEX_BIN=\"$REAL_PDFLATEX\"|" /usr/local/bin/pdflatex-autoinst && \
+      rm -f /usr/local/bin/pdflatex && \
+      cp /usr/local/bin/pdflatex-autoinst /usr/local/bin/pdflatex && \
+      chmod +x /usr/local/bin/pdflatex && \
+      echo "pdflatex autoinst wrapper installed"; \
+    fi
 
 # Set up overleaf user and home directory
 # -----------------------------------------
