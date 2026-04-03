@@ -9,6 +9,11 @@ MAX_ATTEMPTS=3
 ATTEMPT=0
 INSTALLED_PACKAGES=()
 
+if ! XELATEX_BIN="$(command -v xelatex 2>/dev/null)"; then
+    echo "===== AutoInstall: xelatex not found in PATH =====" >&2
+    exit 127
+fi
+
 # Extract package name from LaTeX error message
 extract_package() {
     local line="$1"
@@ -57,7 +62,7 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
     ATTEMPT=$((ATTEMPT + 1))
     
     # Run the actual xelatex command
-    if /usr/bin/xelatex "$@" 2>&1 | tee /tmp/xelatex_output.txt; then
+    if "$XELATEX_BIN" "$@" 2>&1 | tee /tmp/xelatex_output.txt; then
         # Success
         exit 0
     else

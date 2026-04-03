@@ -9,6 +9,11 @@ MAX_ATTEMPTS=3
 ATTEMPT=0
 INSTALLED_PACKAGES=()
 
+if ! LUALATEX_BIN="$(command -v lualatex 2>/dev/null)"; then
+    echo "===== AutoInstall: lualatex not found in PATH =====" >&2
+    exit 127
+fi
+
 # Extract package name from LaTeX error message
 extract_package() {
     local line="$1"
@@ -57,7 +62,7 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
     ATTEMPT=$((ATTEMPT + 1))
     
     # Run the actual lualatex command
-    if /usr/bin/lualatex "$@" 2>&1 | tee /tmp/lualatex_output.txt; then
+    if "$LUALATEX_BIN" "$@" 2>&1 | tee /tmp/lualatex_output.txt; then
         # Success
         exit 0
     else
