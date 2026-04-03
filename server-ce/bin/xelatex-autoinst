@@ -3,6 +3,7 @@
 # This script runs xelatex and automatically installs missing packages
 
 set -e
+set -o pipefail
 
 TEXLIVE_MIRROR="${TEXLIVE_MIRROR:-https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet}"
 MAX_ATTEMPTS=3

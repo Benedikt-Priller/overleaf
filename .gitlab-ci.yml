@@ -387,21 +387,12 @@ test:compile:
       CONTAINER_EXIT_CODE=0
       docker run --name ci-test-compile --rm \
         -v "$OUT_DIR:/out" \
+        -v "$(pwd)/server-ce/test/compile-test.tex:/test/compile-test.tex:ro" \
         --entrypoint /bin/sh \
         "$IMAGE_FINAL:$CI_COMMIT_SHA" \
         -ec '
           cd /out
-          printf "%s\n" \
-            "\\documentclass{article}" \
-            "\\usepackage{siunitx}" \
-            "\\title{AutoInstall Test}" \
-            "\\author{GitLab CI}" \
-            "\\begin{document}" \
-            "\\maketitle" \
-            "\\section{Introduction}" \
-            "Testing automatic package installation for siunitx: \\\\num{12345.678}." \
-            "\\end{document}" > test.tex
-          /usr/local/bin/pdflatex-autoinst -interaction=nonstopmode -halt-on-error test.tex > /out/container.log 2>&1
+          /usr/local/bin/pdflatex-autoinst -interaction=nonstopmode -halt-on-error /test/compile-test.tex > /out/container.log 2>&1
         ' || CONTAINER_EXIT_CODE=$?
 
       echo "Test container exit code: $CONTAINER_EXIT_CODE"
