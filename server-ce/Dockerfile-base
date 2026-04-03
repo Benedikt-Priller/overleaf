@@ -149,7 +149,7 @@ RUN set -eux; \
             for repo in "${TEXLIVE_REPO}" ${TEXLIVE_FALLBACK_MIRRORS}; do \
                   echo "Installing TeX package group 3 (user templates) from ${repo}"; \
                   if tlmgr install --no-execute-actions --repository "${repo}" \
-                        acronym algorithm2e arydshln array cancel calc chemfig chngcntr comment doublestroke dsfont eurosym floatflt forest gauss glossaries-light ifthen import lipsum lscape longtable makecell mhchem multicol multirow nameref newpxmath nicefrac nicematrix nomencl pdflscape pgfplots relsize scalerel setspace siunitx supertabular svg tabularx tcolorbox theoremref tikz-cd tikzsymbols todonotes-tcolorbox translations transparent ulem varwidth varioref venndiagram vhistory witharrows xfrac xifthen xspace \
+                        acronym algorithm2e arydshln array cancel calc chemfig chngcntr comment doublestroke dsfont eurosym floatflt forest gauss glossaries-light ifthen import lipsum lscape longtable makecell mhchem multicol multirow nameref newpxmath nicefrac nicematrix nomencl pdflscape pgfplots relsize scalerel setspace siunitx suffix supertabular svg tabularx tcolorbox theoremref tikz-cd tikzsymbols todonotes-tcolorbox translations transparent ulem varwidth varioref venndiagram vhistory witharrows xfrac xifthen xspace \
                         2>&1 | tee /tmp/tlmgr-install.log; then \
                         INSTALL_OK="1"; \
                         break; \
