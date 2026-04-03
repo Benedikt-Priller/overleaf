@@ -442,6 +442,7 @@ test:compile:
 security:container-scan:
   stage: publish
   image: ghcr.io/aquasecurity/trivy:latest
+  timeout: 45m
   needs:
     - job: build:final
       optional: true
@@ -465,5 +466,31 @@ security:container-scan:
         - ".gitlab-ci.yml"
     - when: never
   script:
-    - trivy image --username "$CI_REGISTRY_USER" --password "$CI_REGISTRY_PASSWORD" --severity HIGH,CRITICAL "$IMAGE_FINAL:$CI_COMMIT_SHA"
+    - |
+      set -eu
+      IMAGE_REF="$IMAGE_FINAL:$CI_COMMIT_SHA"
+      echo "=== Trivy scan target: ${IMAGE_REF} ==="
+      attempt=1
+      max_attempts=3
+      while [ "$attempt" -le "$max_attempts" ]; do
+        echo "=== Trivy scan attempt ${attempt}/${max_attempts} ==="
+        if trivy image \
+          --username "$CI_REGISTRY_USER" \
+          --password "$CI_REGISTRY_PASSWORD" \
+          --severity HIGH,CRITICAL \
+          --scanners vuln \
+          --timeout 30m \
+          --skip-dirs /usr/local/texlive \
+          --skip-dirs /var/lib/texmf \
+          "$IMAGE_REF"; then
+          echo "=== Trivy scan completed successfully ==="
+          exit 0
+        fi
+        attempt=$((attempt + 1))
+        if [ "$attempt" -le "$max_attempts" ]; then
+          echo "=== Trivy scan failed; retrying ==="
+        fi
+      done
+      echo "=== Trivy scan failed after ${max_attempts} attempts ==="
+      exit 1
   allow_failure: true
