@@ -74,6 +74,16 @@ find_missing_filename() {
 }
 
 # Try installing package by filename (always resolve via tlmgr search --file first)
+resolve_tlmgr_package() {
+    local missing="$1"
+    local pkg=""
+    pkg="$(tlmgr search --global --file "/${missing}.sty" 2>/dev/null | awk '/^[[:alnum:]._-]+:$/ { sub(/:$/, "", $1); print $1; exit }' || true)"
+    if [ -z "$pkg" ]; then
+        pkg="$(tlmgr search --global --file "/${missing}.cls" 2>/dev/null | awk '/^[[:alnum:]._-]+:$/ { sub(/:$/, "", $1); print $1; exit }' || true)"
+    fi
+    echo "$pkg"
+}
+
 try_install_package() {
     local missing="$1"
     local pkg=""
@@ -91,10 +101,7 @@ try_install_package() {
     # ALWAYS resolve via tlmgr search --file first (most reliable strategy)
     for repo in "$TEXLIVE_MIRROR" "${TEXLIVE_FALLBACK_MIRRORS[@]}"; do
         ai_log "===== AutoInstall: Searching for package providing /${missing}.sty in $repo ====="
-        pkg="$(tlmgr search --global --file "/${missing}.sty" 2>/dev/null | awk -F: '/:/{print $1; exit}' || true)"
-        if [ -z "$pkg" ]; then
-            pkg="$(tlmgr search --global --file "/${missing}.cls" 2>/dev/null | awk -F: '/:/{print $1; exit}' || true)"
-        fi
+        pkg="$(resolve_tlmgr_package "$missing")"
         if [ -n "$pkg" ]; then
             ai_log "===== AutoInstall: Resolved '$missing' -> tlmgr package '$pkg' ====="
             break
