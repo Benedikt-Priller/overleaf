@@ -7,8 +7,6 @@ set -o pipefail
 
 TEXLIVE_MIRROR="${TEXLIVE_MIRROR:-https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet}"
 TEXLIVE_FALLBACK_MIRRORS=("https://mirror.ctan.org/systems/texlive/tlnet" "https://ctan.math.utah.edu/ctan/tex-archive/systems/texlive/tlnet")
-MAX_ATTEMPTS=3
-ATTEMPT=0
 INSTALLED_PACKAGES=()
 
 # Persist runtime package installs in a writable user tree.
@@ -138,9 +136,7 @@ try_install_package() {
 }
 
 # Main compilation loop with auto-install
-while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-    ATTEMPT=$((ATTEMPT + 1))
-    
+while :; do
     # Run the actual xelatex command
     if "$XELATEX_BIN" "$@" 2>&1 | tee /tmp/xelatex_output.txt; then
         # Success
@@ -166,6 +162,3 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
         exit $EXIT_CODE
     fi
 done
-
-ai_log "===== AutoInstall: Max attempts ($MAX_ATTEMPTS) reached ====="
-exit 1

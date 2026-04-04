@@ -7,8 +7,6 @@ set -o pipefail
 
 TEXLIVE_MIRROR="${TEXLIVE_MIRROR:-https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet}"
 TEXLIVE_FALLBACK_MIRRORS=("https://mirror.ctan.org/systems/texlive/tlnet" "https://ctan.math.utah.edu/ctan/tex-archive/systems/texlive/tlnet")
-MAX_ATTEMPTS=3
-ATTEMPT=0
 INSTALLED_PACKAGES=()
 
 # Persist runtime package installs in a writable user tree.
@@ -138,9 +136,7 @@ try_install_package() {
 }
 
 # Main compilation loop with auto-install
-while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-    ATTEMPT=$((ATTEMPT + 1))
-    
+while :; do
     # Run the actual pdflatex command
     if "$PDFLATEX_BIN" "$@" 2>&1 | tee /tmp/pdflatex_output.txt; then
         # Success
@@ -156,16 +152,13 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             fi
         fi
         
-        # If we found and installed a package, retry
-        if [ $PACKAGE_FOUND -eq 1 ]; then
-            ai_log "===== AutoInstall: Retrying pdflatex after package installation ====="
-            continue
-        fi
+                # If we found and installed a package, retry
+                if [ $PACKAGE_FOUND -eq 1 ]; then
+                    ai_log "===== AutoInstall: Retrying pdflatex after package installation ====="
+                    continue
+                fi
         
-        # If no package found or installation failed, exit with original error
-        exit $EXIT_CODE
-    fi
-done
-
-ai_log "===== AutoInstall: Max attempts ($MAX_ATTEMPTS) reached ====="
-exit 1
+                # If no package found or installation failed, exit with original error
+                exit $EXIT_CODE
+            fi
+        done
