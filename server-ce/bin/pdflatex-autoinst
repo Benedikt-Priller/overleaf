@@ -11,6 +11,11 @@ MAX_ATTEMPTS=3
 ATTEMPT=0
 INSTALLED_PACKAGES=()
 
+ai_log() {
+    echo "$*"
+    echo "$*" >&2
+}
+
 PDFLATEX_BIN="${PDFLATEX_REAL_BIN:-}"
 if [ -z "$PDFLATEX_BIN" ]; then
     PDFLATEX_BIN="$(ls -1d /usr/local/texlive/[0-9][0-9][0-9][0-9]/bin/x86_64-linux/pdflatex 2>/dev/null | sort -V | tail -1 || true)"
@@ -19,16 +24,16 @@ if [ -z "$PDFLATEX_BIN" ]; then
     PDFLATEX_BIN="$(command -v pdflatex 2>/dev/null || true)"
 fi
 if [ -z "$PDFLATEX_BIN" ] || [ "$PDFLATEX_BIN" = "/usr/local/bin/pdflatex" ]; then
-    echo "===== AutoInstall: unable to resolve real pdflatex binary =====" >&2
+    ai_log "===== AutoInstall: unable to resolve real pdflatex binary ====="
     exit 127
 fi
 
 # Verify wrapper is actually being invoked (prevent symlink bypass)
 if [ "$0" = "/usr/local/bin/pdflatex" ] && [ -L "$0" ]; then
-    echo "===== AutoInstall: WARNING - pdflatex is still a symlink, wrapper may be bypassed ====="  >&2
+    ai_log "===== AutoInstall: WARNING - pdflatex is still a symlink, wrapper may be bypassed ====="
 fi
 
-echo "===== AutoInstall: Using pdflatex binary: $PDFLATEX_BIN ====="  >&2
+ai_log "===== AutoInstall: Using pdflatex binary: $PDFLATEX_BIN ====="
 
 # Extract filename from LaTeX error message (broaden patterns for robustness)
 extract_filename() {
@@ -53,6 +58,21 @@ extract_filename() {
     return 1
 }
 
+# Find a missing package marker across likely compile outputs.
+find_missing_filename() {
+    local source_file
+    local line
+    for source_file in "/tmp/pdflatex_output.txt" "output.log" "$PWD/output.log"; do
+        [ -f "$source_file" ] || continue
+        while IFS= read -r line; do
+            if extract_filename "$line"; then
+                return 0
+            fi
+        done < "$source_file"
+    done
+    return 1
+}
+
 # Try installing package by filename (always resolve via tlmgr search --file first)
 try_install_package() {
     local missing="$1"
@@ -60,43 +80,43 @@ try_install_package() {
     
     # Avoid reinstalling the same filename
     if [[ " ${INSTALLED_PACKAGES[@]} " =~ " ${missing} " ]]; then
-        echo "===== AutoInstall: Already attempted to install '$missing', skipping ====="  >&2
+        ai_log "===== AutoInstall: Already attempted to install '$missing', skipping ====="
         return 1
     fi
     
     INSTALLED_PACKAGES+=("$missing")
     
-    echo "===== AutoInstall: Resolving missing file '$missing' ====="  >&2
+    ai_log "===== AutoInstall: Resolving missing file '$missing' ====="
     
     # ALWAYS resolve via tlmgr search --file first (most reliable strategy)
     for repo in "$TEXLIVE_MIRROR" "${TEXLIVE_FALLBACK_MIRRORS[@]}"; do
-        echo "===== AutoInstall: Searching for package providing /${missing}.sty in $repo ====="  >&2
+        ai_log "===== AutoInstall: Searching for package providing /${missing}.sty in $repo ====="
         pkg="$(tlmgr search --global --file "/${missing}.sty" 2>/dev/null | awk -F: '/:/{print $1; exit}' || true)"
         if [ -z "$pkg" ]; then
             pkg="$(tlmgr search --global --file "/${missing}.cls" 2>/dev/null | awk -F: '/:/{print $1; exit}' || true)"
         fi
         if [ -n "$pkg" ]; then
-            echo "===== AutoInstall: Resolved '$missing' -> tlmgr package '$pkg' ====="  >&2
+            ai_log "===== AutoInstall: Resolved '$missing' -> tlmgr package '$pkg' ====="
             break
         fi
     done
     
     if [ -z "$pkg" ]; then
-        echo "===== AutoInstall: FAILED to resolve any package for '$missing' ====="  >&2
+        ai_log "===== AutoInstall: FAILED to resolve any package for '$missing' ====="
         return 1
     fi
     
     # Install the resolved package (with mirror fallback)
     for repo in "$TEXLIVE_MIRROR" "${TEXLIVE_FALLBACK_MIRRORS[@]}"; do
-        echo "===== AutoInstall: Installing resolved package '$pkg' from $repo ====="  >&2
+        ai_log "===== AutoInstall: Installing resolved package '$pkg' from $repo ====="
         if tlmgr install --repository "$repo" "$pkg" 2>&1; then
-            echo "===== AutoInstall: Successfully installed '$pkg' ====="  >&2
+            ai_log "===== AutoInstall: Successfully installed '$pkg' ====="
             mktexlsr >/dev/null 2>&1 || true
             return 0
         fi
     done
     
-    echo "===== AutoInstall: FAILED to install resolved package '$pkg' from all mirrors ====="  >&2
+    ai_log "===== AutoInstall: FAILED to install resolved package '$pkg' from all mirrors ====="
     return 1
 }
 
@@ -111,20 +131,17 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
     else
         EXIT_CODE=$?
         
-        # Check if there's a missing package error in the output
+        # Check if there's a missing package error in compile output/log files
         PACKAGE_FOUND=0
-        while IFS= read -r line; do
-            if MISSING=$(extract_filename "$line"); then
-                if try_install_package "$MISSING"; then
-                    PACKAGE_FOUND=1
-                    break
-                fi
+        if MISSING=$(find_missing_filename); then
+            if try_install_package "$MISSING"; then
+                PACKAGE_FOUND=1
             fi
-        done < /tmp/pdflatex_output.txt
+        fi
         
         # If we found and installed a package, retry
         if [ $PACKAGE_FOUND -eq 1 ]; then
-            echo "===== AutoInstall: Retrying pdflatex after package installation =====" >&2
+            ai_log "===== AutoInstall: Retrying pdflatex after package installation ====="
             continue
         fi
         
@@ -133,5 +150,5 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
     fi
 done
 
-echo "===== AutoInstall: Max attempts ($MAX_ATTEMPTS) reached =====" >&2
+ai_log "===== AutoInstall: Max attempts ($MAX_ATTEMPTS) reached ====="
 exit 1
