@@ -11,6 +11,11 @@ MAX_ATTEMPTS=3
 ATTEMPT=0
 INSTALLED_PACKAGES=()
 
+# Persist runtime package installs in a writable user tree.
+TEXMFHOME="${TEXMFHOME:-/var/lib/overleaf/texmf-user}"
+TEXMFVAR="${TEXMFVAR:-/var/lib/overleaf/texmf-user-var}"
+TEXMFCONFIG="${TEXMFCONFIG:-/var/lib/overleaf/texmf-user-config}"
+
 ai_log() {
     echo "$*"
     echo "$*" >&2
@@ -112,13 +117,18 @@ try_install_package() {
         ai_log "===== AutoInstall: FAILED to resolve any package for '$missing' ====="
         return 1
     fi
+
+    export HOME="${HOME:-/tmp}"
+    export TEXMFHOME TEXMFVAR TEXMFCONFIG
+    mkdir -p "$TEXMFHOME" "$TEXMFVAR" "$TEXMFCONFIG"
+    tlmgr init-usertree >/dev/null 2>&1 || true
     
-    # Install the resolved package (with mirror fallback)
+    # Install the resolved package in usermode (with mirror fallback)
     for repo in "$TEXLIVE_MIRROR" "${TEXLIVE_FALLBACK_MIRRORS[@]}"; do
-        ai_log "===== AutoInstall: Installing resolved package '$pkg' from $repo ====="
-        if tlmgr install --repository "$repo" "$pkg" 2>&1; then
-            ai_log "===== AutoInstall: Successfully installed '$pkg' ====="
-            mktexlsr >/dev/null 2>&1 || true
+        ai_log "===== AutoInstall: Installing resolved package '$pkg' in usermode from $repo ====="
+        if tlmgr --usermode --usertree "$TEXMFHOME" install --repository "$repo" "$pkg" 2>&1; then
+            ai_log "===== AutoInstall: Successfully installed '$pkg' in usermode ====="
+            mktexlsr "$TEXMFHOME" >/dev/null 2>&1 || true
             return 0
         fi
     done
