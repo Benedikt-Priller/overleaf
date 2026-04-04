@@ -6,6 +6,7 @@ set -e
 set -o pipefail
 
 TEXLIVE_MIRROR="${TEXLIVE_MIRROR:-https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet}"
+TEXLIVE_FALLBACK_MIRRORS=("https://mirror.ctan.org/systems/texlive/tlnet" "https://ctan.math.utah.edu/ctan/tex-archive/systems/texlive/tlnet")
 MAX_ATTEMPTS=3
 ATTEMPT=0
 INSTALLED_PACKAGES=()
@@ -22,8 +23,15 @@ if [ -z "$PDFLATEX_BIN" ] || [ "$PDFLATEX_BIN" = "/usr/local/bin/pdflatex" ]; th
     exit 127
 fi
 
-# Extract package name from LaTeX error message
-extract_package() {
+# Verify wrapper is actually being invoked (prevent symlink bypass)
+if [ "$0" = "/usr/local/bin/pdflatex" ] && [ -L "$0" ]; then
+    echo "===== AutoInstall: WARNING - pdflatex is still a symlink, wrapper may be bypassed ====="  >&2
+fi
+
+echo "===== AutoInstall: Using pdflatex binary: $PDFLATEX_BIN ====="  >&2
+
+# Extract filename from LaTeX error message (broaden patterns for robustness)
+extract_filename() {
     local line="$1"
     
     # Pattern 1: File `package.sty' not found
@@ -45,24 +53,51 @@ extract_package() {
     return 1
 }
 
-# Try installing a package
+# Try installing package by filename (always resolve via tlmgr search --file first)
 try_install_package() {
-    local package="$1"
+    local missing="$1"
+    local pkg=""
     
-    # Avoid reinstalling the same package
-    if [[ " ${INSTALLED_PACKAGES[@]} " =~ " ${package} " ]]; then
+    # Avoid reinstalling the same filename
+    if [[ " ${INSTALLED_PACKAGES[@]} " =~ " ${missing} " ]]; then
+        echo "===== AutoInstall: Already attempted to install '$missing', skipping ====="  >&2
         return 1
     fi
     
-    echo "===== AutoInstall: Installing package '$package' =====" >&2
+    INSTALLED_PACKAGES+=("$missing")
     
-    if tlmgr install --repository "$TEXLIVE_MIRROR" "$package" 2>&1; then
-        INSTALLED_PACKAGES+=("$package")
-        return 0
-    else
-        echo "===== AutoInstall: Failed to install package '$package' =====" >&2
+    echo "===== AutoInstall: Resolving missing file '$missing' ====="  >&2
+    
+    # ALWAYS resolve via tlmgr search --file first (most reliable strategy)
+    for repo in "$TEXLIVE_MIRROR" "${TEXLIVE_FALLBACK_MIRRORS[@]}"; do
+        echo "===== AutoInstall: Searching for package providing /${missing}.sty in $repo ====="  >&2
+        pkg="$(tlmgr search --global --file "/${missing}.sty" 2>/dev/null | awk -F: '/:/{print $1; exit}' || true)"
+        if [ -z "$pkg" ]; then
+            pkg="$(tlmgr search --global --file "/${missing}.cls" 2>/dev/null | awk -F: '/:/{print $1; exit}' || true)"
+        fi
+        if [ -n "$pkg" ]; then
+            echo "===== AutoInstall: Resolved '$missing' -> tlmgr package '$pkg' ====="  >&2
+            break
+        fi
+    done
+    
+    if [ -z "$pkg" ]; then
+        echo "===== AutoInstall: FAILED to resolve any package for '$missing' ====="  >&2
         return 1
     fi
+    
+    # Install the resolved package (with mirror fallback)
+    for repo in "$TEXLIVE_MIRROR" "${TEXLIVE_FALLBACK_MIRRORS[@]}"; do
+        echo "===== AutoInstall: Installing resolved package '$pkg' from $repo ====="  >&2
+        if tlmgr install --repository "$repo" "$pkg" 2>&1; then
+            echo "===== AutoInstall: Successfully installed '$pkg' ====="  >&2
+            mktexlsr >/dev/null 2>&1 || true
+            return 0
+        fi
+    done
+    
+    echo "===== AutoInstall: FAILED to install resolved package '$pkg' from all mirrors ====="  >&2
+    return 1
 }
 
 # Main compilation loop with auto-install
@@ -79,8 +114,8 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
         # Check if there's a missing package error in the output
         PACKAGE_FOUND=0
         while IFS= read -r line; do
-            if PACKAGE=$(extract_package "$line"); then
-                if try_install_package "$PACKAGE"; then
+            if MISSING=$(extract_filename "$line"); then
+                if try_install_package "$MISSING"; then
                     PACKAGE_FOUND=1
                     break
                 fi
